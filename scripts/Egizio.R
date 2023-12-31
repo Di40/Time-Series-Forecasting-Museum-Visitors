@@ -78,6 +78,10 @@ print(rows_with_na_data)
 
 print("Count of NAs in each column after modification:")
 print(colSums(is.na(egizio_visitors_df)))
+egizio_visitors_df$visitors<-as.integer(egizio_visitors_df$visitors)
+print("Count of NAs in each column:")
+print(colSums(is.na(egizio_visitors_df)))
+
 
 # ToDo: Check if for the other museums the closing months for COVID are pretty much the same.
 
