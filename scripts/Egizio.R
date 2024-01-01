@@ -11,6 +11,7 @@ library(caret)
 library(xgboost)
 library(timetk)
 library(forecast)
+library(car)
 
 # ---------------------------------------------------------------------------- #
 
@@ -50,7 +51,14 @@ egizio_visitors_df$date <- as.Date(as.yearmon(paste(egizio_visitors_df$year,
                                                     egizio_visitors_df$month,
                                                     sep = "-")))
 
-egizio_visitors_df$quarter <- quarter(egizio_visitors_df$date)
+egizio_visitors_df$quarter <- as.ordered(quarter(egizio_visitors_df$date))
+egizio_visitors_df$month <- as.ordered(egizio_visitors_df$month)
+
+# We can't use the year as a categorical variable, because if in the training
+# set we have years 2006-2021, and we want to predict for the year 2022, this
+# year will have no variable associated to it in the model, and predictions
+# won't be possible.
+# Therefore, we will keep year as integer.
 
 # ToDo: Create lagged variables.
 
@@ -78,10 +86,12 @@ print(rows_with_na_data)
 
 print("Count of NAs in each column after modification:")
 print(colSums(is.na(egizio_visitors_df)))
-egizio_visitors_df$visitors<-as.integer(egizio_visitors_df$visitors)
+
 print("Count of NAs in each column:")
 print(colSums(is.na(egizio_visitors_df)))
 
+egizio_visitors_df$visitors <- as.integer(egizio_visitors_df$visitors)
+str(egizio_visitors_df)
 
 # ToDo: Check if for the other museums the closing months for COVID are pretty much the same.
 
@@ -141,7 +151,11 @@ egizio_df <- merge(egizio_visitors_df, egizio_googletrends_df, by = "date", all.
 egizio_df <- merge(egizio_df, turin_weather_df, by = "date", all.x = TRUE)
 egizio_df <- merge(egizio_df, italy_holidays_df, by = "date", all.x = TRUE)
 
-write.csv(egizio_df, "egizio_final.csv", row.names = FALSE)
+egizio_df$school_holidays <- factor(egizio_df$school_holidays, ordered = TRUE, levels = 0:31)
+
+str(egizio_df)
+
+write.csv(egizio_df, "../data/egizio_final.csv", row.names = FALSE)
 
 # ToDo: The code up to here shall be moved to preprocessing.R. -> at a later stage
 
@@ -149,6 +163,10 @@ write.csv(egizio_df, "egizio_final.csv", row.names = FALSE)
 #                       Exploratory Data Analysis
 # ---------------------------------------------------------------------------- #
 # Plotting
+
+egizio_visitors_df <- read.csv("../data/egizio_final.csv")
+
+str(egizio_visitors_df)
 
 # ToDos: Check whether better visualization techniques can be used.
 
@@ -186,9 +204,9 @@ write.csv(egizio_df, "egizio_final.csv", row.names = FALSE)
 # Smarter plotting
 
 # Melt the dataframe for easier plotting
-egizio_melted_df <- reshape2::melt(egizio_df, id.vars = "date")
 exclude_vars <- c("month", "quarter", "year")
-egizio_melted_df <- egizio_melted_df[!(egizio_melted_df$variable %in% exclude_vars), ]
+egizio_filtered_df <- egizio_df[, !(names(egizio_df) %in% exclude_vars)]
+egizio_melted_df <- reshape2::melt(egizio_filtered_df, id.vars = "date")
 
 # Create a single plot for all variables
 ggplot(egizio_melted_df, aes(x = date, y = value, color = variable)) +
@@ -197,24 +215,7 @@ ggplot(egizio_melted_df, aes(x = date, y = value, color = variable)) +
   facet_wrap(~ variable, scales = "free_y", ncol = 1)
 
 # ---------------------------------------------------------------------------- #
-# Plot just for one year
-select_year <- "2005"
-egizio_df_one_year <- subset(egizio_df, year == select_year)
-egizio_melted_df_one_year <- reshape2::melt(egizio_df_one_year, id.vars = "date")
-exclude_vars <- c("month", "quarter", "year")
-egizio_melted_df_one_year <- egizio_melted_df_one_year[!(egizio_melted_df_one_year$variable %in% exclude_vars), ]
-
-ggplot(egizio_melted_df_one_year, aes(x = date, y = value, color = variable)) +
-  geom_line() +
-  labs(title = paste("Egizio -", select_year), x = "Date", y = "Values") +
-  facet_wrap(~ variable, scales = "free_y", ncol = 1)
-
-# ---------------------------------------------------------------------------- #
 # Boxplots
-
-egizio_melted_df <- reshape2::melt(egizio_df, id.vars = "date")
-exclude_vars <- c("month", "quarter", "year")
-egizio_melted_df <- egizio_melted_df[!(egizio_melted_df$variable %in% exclude_vars), ]
 
 ggplot(egizio_melted_df, aes(x = date, y = value, fill = variable)) +
   geom_boxplot() +
@@ -234,9 +235,26 @@ ggplot(egizio_melted_df, aes(x = date, y = value, fill = variable)) +
   facet_wrap(~ variable, scales = "free_y", ncol = length(unique(egizio_melted_df$variable)))
 
 # ---------------------------------------------------------------------------- #
+# Plot just for one year
+select_year <- "2005"
+egizio_one_year_df <- subset(egizio_df, year == select_year)
+egizio_one_year_filtered_df <- egizio_one_year_df[, !(names(egizio_one_year_df) %in% exclude_vars)]
+egizio_one_year_melted_df <- reshape2::melt(egizio_one_year_filtered_df, id.vars = "date")
+
+ggplot(egizio_one_year_melted_df, aes(x = date, y = value, color = variable)) +
+  geom_line() +
+  labs(title = paste("Egizio -", select_year), x = "Date", y = "Values") +
+  facet_wrap(~ variable, scales = "free_y", ncol = 1)
+
+# ---------------------------------------------------------------------------- #
 # Monthly and yearly boxplots
 
-egizio_melted_df <- reshape2::melt(egizio_df, id.vars = c("date", "month"))
+egizio_melted_df <- egizio_df
+egizio_melted_df$month <- as.integer(egizio_melted_df$month)
+exclude_vars <- c("year", "quarter")
+egizio_melted_df <- egizio_melted_df[, !(names(egizio_melted_df) %in% exclude_vars)]
+
+egizio_melted_df <- reshape2::melt(egizio_melted_df, id.vars = c("date", "month"))
 egizio_df_melted_visitors <- subset(egizio_melted_df, variable == "visitors")
 
 ggplot(egizio_df_melted_visitors, aes(x = factor(month), y = value, fill = variable)) +
@@ -247,7 +265,13 @@ ggplot(egizio_df_melted_visitors, aes(x = factor(month), y = value, fill = varia
   facet_wrap(~ month, scales = "free_x", ncol = 12)
 
 # Create boxplots for each year
-egizio_melted_df <- reshape2::melt(egizio_df, id.vars = c("date", "year"))
+
+egizio_melted_df <- egizio_df
+egizio_melted_df$month <- as.integer(egizio_melted_df$month)
+exclude_vars <- c("month", "quarter")
+egizio_melted_df <- egizio_melted_df[, !(names(egizio_melted_df) %in% exclude_vars)]
+
+egizio_melted_df <- reshape2::melt(egizio_melted_df, id.vars = c("date", "year"))
 egizio_df_melted_visitors <- subset(egizio_melted_df, variable == "visitors")
 
 ggplot(egizio_df_melted_visitors, aes(x = factor(year), y = value, fill = variable)) +
@@ -267,6 +291,7 @@ ggplot(egizio_df_melted_visitors, aes(x = factor(year), y = value, fill = variab
 metrics_df <- data.frame(
   Model = character(),
   R2 = numeric(),
+  Adj_R2 = numeric(),
   MSE = numeric(),
   RMSE = numeric(),
   MAE = numeric(),
@@ -311,27 +336,35 @@ cat("Ratio of train set size to test set size:", ratio_train, ":", ratio_test)
 # egizio_train_df$trends <- (egizio_train_df$trends - train_trends_mean) / train_trends_sd
 # egizio_test_df$trends <- (egizio_test_df$trends - train_trends_mean) / train_trends_sd
 
-standardize_columns <- function(train_df, test_df) {
+standardize_numeric_columns <- function(train_df, test_df) {
   # Extract numeric columns (excluding "date")
-  numeric_columns <- setdiff(names(train_df), "date")
+  numeric_columns <- sapply(train_df, is.numeric) & names(train_df) != "date"
   
-  for (col in numeric_columns) {
-    # Calculate mean and standard deviation from the training data
-    train_col_mean <- mean(train_df[[col]])
-    train_col_sd <- sd(train_df[[col]])
+  # Calculate mean and standard deviation for each numeric column in the training set
+  means <- colMeans(train_df[, numeric_columns], na.rm = TRUE)
+  std_devs <- apply(train_df[, numeric_columns], 2, sd, na.rm = TRUE)
+  
+  # Standardize the columns in both train and test data frames using means and std_devs from the training set
+  for (col in names(train_df)[numeric_columns]) {
+    # Impute missing values (if any) with mean in both train and test data frames
+    mean_value <- means[col]
+    train_df[[col]][is.na(train_df[[col]])] <- mean_value
+    test_df[[col]][is.na(test_df[[col]])] <- mean_value
     
-    # Standardize the column in both train and test data frames
-    train_df[[col]] <- (train_df[[col]] - train_col_mean) / train_col_sd
-    test_df[[col]] <- (test_df[[col]] - train_col_mean) / train_col_sd
+    # Standardize the column in both train and test data frames using means and std_devs from the training set
+    train_df[[col]] <- (train_df[[col]] - means[col]) / std_devs[col]
+    test_df[[col]] <- (test_df[[col]] - means[col]) / std_devs[col]
   }
   
   # Return the standardized data frames
   return(list(train_df = train_df, test_df = test_df))
 }
 
-standardize <- standardize_columns(egizio_train_df, egizio_test_df)
+# Example usage
+standardize <- standardize_numeric_columns(egizio_train_df, egizio_test_df)
 egizio_train_df <- standardize$train_df
 egizio_test_df <- standardize$test_df
+
 
 # ToDo: Decide how to improve the legend.
 # ToDo: Also, maybe it's better to split it to two subplots: top - visitors, bottom - trends?
@@ -374,10 +407,11 @@ n <- nrow(egizio_test_df)
 sse <- sum((egizio_test_df$visitors - egizio_predictions_df$predicted_visitors_mean) ^ 2)
 k <- 1
 aic <- n * log(sse / n) + 2 * k
+adj_r_squared <- 1 - (1 - r_squared) * (n - 1) / (n - k - 1)
 
 metrics_df <- rbind(metrics_df, list(Model = "Baseline - mean",
-                                     R2 = r_squared, MSE = mse,
-                                     RMSE = rmse, MAE = mae,
+                                     R2 = r_squared, R2_adj = adj_r_squared,
+                                     MSE = mse, RMSE = rmse, MAE = mae,
                                      MAPE = mape, AIC = aic))
 print(metrics_df)
 
@@ -422,13 +456,13 @@ n <- nrow(egizio_test_df)
 sse <- sum((egizio_test_df$visitors - egizio_predictions_df$predicted_visitors_last_year) ^ 2)
 k <- 1
 aic <- n * log(sse / n) + 2 * k
+adj_r_squared <- 1 - (1 - r_squared) * (n - 1) / (n - k - 1)
 
 metrics_df <- rbind(metrics_df, list(Model = "Baseline - last year",
-                                     R2 = r_squared, MSE = mse,
-                                     RMSE = rmse, MAE = mae,
+                                     R2 = r_squared, R2_adj = adj_r_squared,
+                                     MSE = mse, RMSE = rmse, MAE = mae,
                                      MAPE = mape, AIC = aic))
 print(metrics_df)
-
 
 ggplot(egizio_predictions_df, aes(x = date)) +
   geom_line(aes(y = predicted_visitors_last_year, color = "Predicted"),
@@ -459,10 +493,11 @@ rmse <- sqrt(mean((baseline_data$visitors - baseline_data$predicted_visitors_aut
 mae <- mean(abs(baseline_data$visitors - baseline_data$predicted_visitors_autoregressive))
 mape <- mean(abs((baseline_data$visitors - baseline_data$predicted_visitors_autoregressive) / baseline_data$visitors)) * 100
 aic <- AIC(baseline_model)
+adj_r_squared <- 1 - (1 - r_squared) * (n - 1) / (n - k - 1)
 
 metrics_df <- rbind(metrics_df, list(Model = "Baseline - auto regressive",
-                                     R2 = r_squared, MSE = mse,
-                                     RMSE = rmse, MAE = mae,
+                                     R2 = r_squared, R2_adj = adj_r_squared,
+                                     MSE = mse, RMSE = rmse, MAE = mae,
                                      MAPE = mape, AIC = aic))
 print(metrics_df)
 
@@ -481,7 +516,9 @@ egizio_test_df <- egizio_test_df[, !colnames(egizio_test_df) %in% "visitors_yest
 # Model 1 - Multiple LR
 
 # ToDo: Add other dependent variables
-all_features_regression <- lm(visitors ~ .-visitors - date, data = egizio_train_df)
+str(egizio_train_df)
+all_features_regression <- lm(visitors ~ .-visitors - date - quarter, data = egizio_train_df)
+# Month and quarter are correlated, so we have to remove the quarter.
 summary(all_features_regression)
 # ToDo: The model works better if we include date. Investigate this.
 
@@ -489,6 +526,7 @@ egizio_predictions_df$predicted_multiple_lr <- predict(all_features_regression, 
 
 # Calculate metrics
 r_squared <- summary(all_features_regression)$r.squared
+adj_r_squared <- summary(all_features_regression)$adj.r.squared
 mse <- mean((egizio_test_df$visitors - egizio_predictions_df$predicted_multiple_lr) ^ 2)
 rmse <- sqrt(mean((egizio_test_df$visitors - egizio_predictions_df$predicted_multiple_lr) ^ 2))
 mae <- mean(abs(egizio_test_df$visitors - egizio_predictions_df$predicted_multiple_lr))
@@ -496,8 +534,8 @@ mape <- mean(abs((egizio_test_df$visitors - egizio_predictions_df$predicted_mult
 aic <- AIC(all_features_regression)
 
 metrics_df <- rbind(metrics_df, list(Model = "Multiple LR",
-                                     R2 = r_squared, MSE = mse,
-                                     RMSE = rmse, MAE = mae,
+                                     R2 = r_squared, R2_adj = adj_r_squared,
+                                     MSE = mse, RMSE = rmse, MAE = mae,
                                      MAPE = mape, AIC = aic))
 print(metrics_df)
 
@@ -530,7 +568,7 @@ mai.new <- mai.old # new vector
 mai.new[2] <- 2.5 #new space on the left
 
 # This can be used visitors ~ .- visitors - date + as.numeric(date)
-boost_visitors <- gbm(visitors ~ .-visitors - date, data=egizio_train_df, 
+boost_visitors <- gbm(visitors ~ .-visitors - date - quarter, data=egizio_train_df, 
                       distribution="gaussian", n.trees=5000, interaction.depth=1)
 
 par(mai=mai.new)
@@ -548,7 +586,7 @@ abline(v=best, lty=2, col=4)
 print(min(err)) # minimum error
 
 # 2 Boosting - Deeper trees
-boost_visitors <- gbm(visitors ~ .- visitors - date,
+boost_visitors <- gbm(visitors ~ . - visitors - date - quarter,
                       data=egizio_train_df, distribution="gaussian", n.trees=5000,
                       interaction.depth=4) # (with more than one variable)
 
@@ -566,7 +604,7 @@ abline(v=best, lty=2, col=4)
 print(min(err))
 
 # 3 Boosting - Smaller learning rate 
-boost_visitors <- gbm(visitors ~ .- visitors - date, data=egizio_train_df,
+boost_visitors <- gbm(visitors ~ .- visitors - date - quarter, data=egizio_train_df,
                       distribution="gaussian", n.trees=5000, interaction.depth=1,
                       shrinkage=0.01) # learning rate
 
@@ -584,7 +622,7 @@ abline(v=best, lty=2, col=4)
 print(min(err))
 
 # 4 Boosting - combination of previous models
-boost_visitors <- gbm(visitors ~ .- visitors - date, data=egizio_train_df,
+boost_visitors <- gbm(visitors ~ .- visitors - date - quarter, data=egizio_train_df,
                       distribution="gaussian", n.trees=5000,
                       interaction.depth=4, shrinkage=0.01)
 # interaction.depth=4 we consider a deeper three, interactions inside the tree
@@ -717,8 +755,8 @@ mae <- mean(abs(egizio_test_df$visitors - egizio_predictions_df$predicted_visito
 mape <- mean(abs((egizio_test_df$visitors - egizio_predictions_df$predicted_visitors_boosting) / egizio_test_df$visitors)) * 100
 
 metrics_df <- rbind(metrics_df, list(Model = "Boosting - TSCV",
-                                     R2 = r_squared, MSE = mse,
-                                     RMSE = rmse, MAE = mae,
+                                     R2 = r_squared, R2_adj = adj_r_squared,
+                                     MSE = mse, RMSE = rmse, MAE = mae,
                                      MAPE = mape, AIC = NA))
 print(metrics_df)
 
@@ -758,9 +796,9 @@ mape_xgb <- mean(abs((egizio_test_df$visitors - egizio_predictions_df$predicted_
 
 # Update metrics_df with XGBoost metrics
 metrics_df <- rbind(metrics_df, list(Model = "XGBoost",
-                                     R2 = r_squared_xgb, MSE = mse_xgb,
-                                     RMSE = rmse_xgb, MAE = mae_xgb,
-                                     MAPE = mape_xgb, AIC = NA))  # Note: AIC may not be applicable for XGBoost
+                                     R2 = r_squared, R2_adj = adj_r_squared,
+                                     MSE = mse, RMSE = rmse, MAE = mae,
+                                     MAPE = mape, AIC = NA)) # Note: AIC may not be applicable for XGBoost
 
 print(metrics_df)
 
@@ -833,8 +871,8 @@ mape <- mean(abs((egizio_test_df$visitors - egizio_predictions_df$predicted_visi
 
 # Update metrics_df with XGBoost metrics
 metrics_df <- rbind(metrics_df, list(Model = "XGBoost - TSCV",
-                                     R2 = r_squared, MSE = mse,
-                                     RMSE = rmse, MAE = mae,
+                                     R2 = r_squared, R2_adj = adj_r_squared,
+                                     MSE = mse, RMSE = rmse, MAE = mae,
                                      MAPE = mape, AIC = NA)) # Note: AIC may not be applicable for XGBoost
 
 print(metrics_df)
@@ -847,3 +885,4 @@ ggplot(egizio_predictions_df, aes(x = date)) +
        x = "Date",
        y = "Values") +
   scale_color_manual(values = c("Visitors" = "red", "Predicted" = "blue"))
+
