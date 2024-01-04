@@ -12,6 +12,9 @@ library(gbm)
 library(timetk)
 library(caret)
 library(xgboost)
+library(DIMORA)
+
+rm(list=ls())
 
 # Change working directory
 script_path <- rstudioapi::getSourceEditorContext()$path
@@ -33,6 +36,7 @@ set.seed(123)
 # Read data
 
 egizio_df <- readRDS("../data/egizio_final.rds")
+print(head(egizio_df))
 str(egizio_df)
 
 # ---------------------------------------------------------------------------- #
@@ -50,7 +54,7 @@ metrics_df <- data.frame(
   stringsAsFactors = FALSE
 )
 
-features <- c('month', 'year' , 'trends', 'average_temperature', 'raining_days', 'school_holidays')
+features <- c('month', 'year' , 'trends', 'average_temperature', 'raining_days', 'school_holidays', 'arrivals')
 target <- 'visitors'
 
 # ---------------------------------------------------------------------------- #
@@ -84,33 +88,33 @@ cat("Ratio of train set size to test set size:", ratio_train, ":", ratio_test)
 # egizio_train_df$trends <- (egizio_train_df$trends - train_trends_mean) / train_trends_sd
 # egizio_test_df$trends <- (egizio_test_df$trends - train_trends_mean) / train_trends_sd
 
-standardize_numeric_columns <- function(train_df, test_df) {
+#standardize_numeric_columns <- function(train_df, test_df) {
   # Extract numeric columns (excluding "date")
-  numeric_columns <- sapply(train_df, is.numeric) & names(train_df) != "date"
+ # numeric_columns <- sapply(train_df, is.numeric) & names(train_df) != "date"
   
   # Calculate mean and standard deviation for each numeric column in the training set
-  means <- colMeans(train_df[, numeric_columns], na.rm = TRUE)
-  std_devs <- apply(train_df[, numeric_columns], 2, sd, na.rm = TRUE)
+  #means <- colMeans(train_df[, numeric_columns], na.rm = TRUE)
+ # std_devs <- apply(train_df[, numeric_columns], 2, sd, na.rm = TRUE)
   
   # Standardize the columns in both train and test data frames using means and std_devs from the training set
-  for (col in names(train_df)[numeric_columns]) {
+ # for (col in names(train_df)[numeric_columns]) {
     # Impute missing values (if any) with mean in both train and test data frames
-    mean_value <- means[col]
-    train_df[[col]][is.na(train_df[[col]])] <- mean_value
-    test_df[[col]][is.na(test_df[[col]])] <- mean_value
+  #  mean_value <- means[col]
+   # train_df[[col]][is.na(train_df[[col]])] <- mean_value
+    #test_df[[col]][is.na(test_df[[col]])] <- mean_value
     
-    # Standardize the column in both train and test data frames using means and std_devs from the training set
-    train_df[[col]] <- (train_df[[col]] - means[col]) / std_devs[col]
-    test_df[[col]] <- (test_df[[col]] - means[col]) / std_devs[col]
-  }
+#    # Standardize the column in both train and test data frames using means and std_devs from the training set
+  #  train_df[[col]] <- (train_df[[col]] - means[col]) / std_devs[col]
+ #   test_df[[col]] <- (test_df[[col]] - means[col]) / std_devs[col]
+  #}
   
   # Return the standardized data frames
-  return(list(train_df = train_df, test_df = test_df))
-}
+#  return(list(train_df = train_df, test_df = test_df))
+#}
 
-standardize <- standardize_numeric_columns(egizio_train_df, egizio_test_df)
-egizio_train_df <- standardize$train_df
-egizio_test_df <- standardize$test_df
+#standardize <- standardize_numeric_columns(egizio_train_df, egizio_test_df)
+#egizio_train_df <- standardize$train_df
+#egizio_test_df <- standardize$test_df
 print(head(egizio_train_df))
 print(head(egizio_test_df))
 
@@ -173,6 +177,7 @@ metrics_df <- rbind(metrics_df, list(Model = "Baseline - mean",
                                      MSE = mse, RMSE = rmse, MAE = mae,
                                      MAPE = mape, AIC = NA))
 print(metrics_df)
+
 
 ggplot(egizio_predictions_df, aes(x = date)) +
   geom_line(aes(y = predicted_visitors_mean, color = "Predicted"),
@@ -269,6 +274,314 @@ plot(egizio_train_df$date, res_lm, xlab="date", ylab="Residuals", type= "b",  pc
 
 plot(Acf(res_lm), xlab = "Lag", main = "Autocorrelation of Residuals",
      col = "steelblue", lwd = 2.5, ci.col = "black", cex.lab = 1.2, cex.main = 1.5)
+#######################
+#Model with trend and seasonality
+egizio_train.ts <- ts(egizio_train_df$visitors, frequency = 12)  
+egizio_test.ts <- ts(egizio_test_df$visitors, frequency = 12)
+ts.plot(egizio_train.ts, type="o")
+
+# Fit a linear model with trend
+fitts <- tslm(egizio_train.ts ~ trend+ season)
+# Print the summary of the fitted model
+summary(fitts)
+
+# Perform the Durbin-Watson test
+dwtest(fitts)
+
+fcast <- forecast(fitts, newdata = egizio_test_df, h = nrow(egizio_test_df))
+
+# Plot the forecast on the test data
+plot(fcast)
+
+r_squared <- summary(fitts)$r.squared
+adj_r_squared <- summary(fitts)$adj.r.squared
+aic <- AIC(fitts)
+mse <- mean((fcast$mean - egizio_test_df$visitors)^2)
+rmse <- sqrt(mse)
+mae <- mean(abs(fcast$mean - egizio_test_df$visitors))
+mape <- mean(abs((fcast$mean - egizio_test_df$visitors) / egizio_test_df$visitors)) * 100
+metrics_df <- rbind(metrics_df, list(
+  Model = "Trend and Seasonality",
+  R2 = r_squared,
+  R2_adj = adj_r_squared,
+  MSE = mse,
+  RMSE = rmse,
+  MAE = mae,
+  MAPE = mape,
+  AIC = aic
+))
+
+# 8. Print and Append to Metrics DataFrame
+print(metrics_df)
+
+# --------------------------------------------------------------------- #
+
+#########with the other feature
+
+# Convert to time series
+egizio_train <- ts(egizio_train_df$visitors, frequency = 12)
+trends_train <- ts(egizio_train_df$trends, frequency = 12)
+average_temperature_train <- ts(egizio_train_df$average_temperature, frequency = 12)
+raining_days_train <- ts(egizio_train_df$raining_days, frequency = 12)
+school_holidays_train <- ts(egizio_train_df$school_holidays, frequency = 12)
+arrivals_train <- ts(egizio_train_df$arrivals, frequency = 12)
+date_train <- ts(egizio_train_df$date, frequency = 12)  # Assuming 'date' is in a date format
+covid_train <- ts(egizio_train_df$Covid_closures, frequency = 12)
+renovation_train <- ts(egizio_train_df$renovation, frequency = 12)
+# Combine variables into a data frame
+train_data <- data.frame(
+  visitors = egizio_train,
+  trends = trends_train,
+  average_temperature = average_temperature_train,
+  raining_days = raining_days_train,
+  school_holidays = school_holidays_train,
+  arrivals = arrivals_train,
+  date = date_train,
+  covid=covid_train,
+  renovation=renovation_train
+)
+
+# Fit the model on the training set
+fit.vis <- tslm(visitors ~ date + trends + average_temperature + raining_days + school_holidays + arrivals + trend + season +covid+ renovation, data = train_data)
+
+# Print summary
+summary(fit.vis)
+CV(fit.vis)      #Aikaike 
+
+plot(egizio_train)
+
+lines(fitted(fit.vis), col=2)   #make sens it didn't expect covid this bad and slow to restart
+
+res<- residuals(fit.vis)
+plot(res)
+acf(res)   
+dwtest(fit.vis)
+
+# Cross-validation
+cv_results <- CV(fit.vis)
+print(cv_results)
+
+
+# Forecasting on the test set
+test_data <- data.frame(
+  date = ts(egizio_test_df$date, frequency = 12),
+  trends = ts(egizio_test_df$trends, frequency = 12),
+  average_temperature = ts(egizio_test_df$average_temperature, frequency = 12),
+  raining_days = ts(egizio_test_df$raining_days, frequency = 12),
+  school_holidays = ts(egizio_test_df$school_holidays, frequency = 12),
+  arrivals = ts(egizio_test_df$arrivals, frequency = 12),
+  covid =ts(egizio_test_df$Covid_closures, frequency = 12),
+  renovation= ts(egizio_test_df$renovation, frequency = 12)
+)
+
+fcast <- forecast(fit.vis, newdata = test_data, h = nrow(egizio_test_df))
+
+plot(fcast)
+
+# Calculate metrics on the test set
+r_squared <- summary(fit.vis)$r.squared
+adj_r_squared <- summary(fit.vis)$adj.r.squared
+aic <- AIC(fit.vis)
+mse <- mean((fcast$mean - egizio_test_df$visitors)^2)
+rmse <- sqrt(mse)
+mae <- mean(abs(fcast$mean - egizio_test_df$visitors))
+mape <- mean(abs((fcast$mean - egizio_test_df$visitors) / egizio_test_df$visitors)) * 100
+
+# Create metrics DataFrame
+metrics_df <-  rbind(metrics_df, list(
+  Model = "Tslm with features",
+  R2 = r_squared,
+  R2_adj = adj_r_squared,
+  MSE = mse,
+  RMSE = rmse,
+  MAE = mae,
+  MAPE = mape,
+  AIC = aic
+))
+
+# Print metrics
+print(metrics_df)
+
+
+######LASSO########
+library(glmnet)
+egizio_train_df$date <- as.numeric(egizio_train_df$date)
+egizio_test_df$date <- as.numeric(egizio_test_df$date)
+y_train <- egizio_train_df[,4]
+X_train <- egizio_train_df[,c(-4)]
+
+# Convert data to matrix format
+X_train <- as.matrix(X_train)
+y_train <- as.matrix(y_train)
+
+# Fit LASSO regression model
+lasso_reg_model <- cv.glmnet(x = X_train, y = y_train, alpha = 1)
+
+
+# Choose the optimal lambda based on cross-validated error
+lambda_opt <- lasso_reg_model$lambda.min
+lambda_opt
+
+best_model <- glmnet(X_train, y_train, alpha = 1, lambda = lambda_opt)
+coef(best_model)
+# Predictions on the test set using the optimal lambda
+X_test <- as.matrix(egizio_test_df[,-4])
+predictions <- predict(lasso_reg_model, newx = X_test, s = lambda_opt)
+
+# Calculate errors
+errors <- mean((egizio_test_df[, 4] - predictions)^2)
+
+# Print the optimal lambda and corresponding coefficients
+cat("Optimal Lambda:", lambda_opt, "\n")
+cat("Coefficients at Optimal Lambda:\n")
+print(coef(lasso_reg_model, s = lambda_opt))
+
+# Summary of the LASSO regression model
+summary(lasso_reg_model)
+
+mse_lasso <- mse(egizio_test_df[, 4], predictions)
+rmse_lasso <- sqrt(mse_lasso)
+mae_lasso <- mae(egizio_test_df[, 4], predictions)
+mape_lasso <- mape(egizio_test_df[, 4], predictions)
+
+# Print metrics for LASSO
+cat("\nMetrics for LASSO:\n")
+cat("MSE (LASSO):", mse_lasso, "\n")
+cat("RMSE (LASSO):", rmse_lasso, "\n")
+cat("MAE (LASSO):", mae_lasso, "\n")
+cat("MAPE (LASSO):", mape_lasso, "\n")
+
+metrics_df <-  rbind(metrics_df, list(
+  Model = "Lasso",
+  R2 =NA,
+  R2_adj = NA,
+  MSE = mse_lasso,
+  RMSE = rmse_lasso,
+  MAE = mae_lasso,
+  MAPE = mape_lasso,
+  AIC = NA
+))
+
+# Print metrics
+print(metrics_df)
+################################
+##############GAM###############
+################################
+library(gam)
+
+###################
+##Stepwise GAM
+#Start with a linear model (df=1)
+g3 <- gam(visitors~., data=egizio_train_df)
+summary(g3)
+#Show the linear effects 
+#par(mfrow=c(3,5))
+#plot(g3, se=T) 
+AIC(g3)
+
+sc <- gam.scope(egizio_train_df[, -c(4, 11, 10)], arg = c("df=2", "df=3", "df=4"))
+g4 <- step.Gam(g3, scope =sc, trace = TRUE)
+summary(g4)
+
+AIC(g4)
+
+#par(mfrow=c(3,5))
+#plot(g4, se=T)
+
+#if we want to see better some plot
+#par(mfrow=c(1,1))
+#plot(g4, se=T, ask=T)
+
+
+#Prediction
+p.gam <- predict(g4,newdata=egizio_test_df)     
+dev.gam <- sum((p.gam-egizio_test_df$visitors)^2)
+dev.gam
+
+
+g5 <- gam(visitors ~ s(date) + s(year) + s(month) + s(trends) + s(average_temperature) +
+            s(raining_days) + s(school_holidays) + s(arrivals) + Covid_closures +
+            renovation, 
+          data = egizio_train_df)
+
+summary(g5)
+AIC(g5)
+
+
+
+g5 <- gam(visitors ~s(date) + s(year) + s(month) + s(trends) + s(average_temperature) +
+            s(raining_days) + s(school_holidays) + s(arrivals) + Covid_closures +
+            renovation, 
+          data = egizio_train_df)
+
+summary(g5)
+AIC(g5)
+#################################################
+###################Shocking######################
+#################################################
+
+bm_visitors <- BM(egizio_train_df$visitors, display = TRUE)
+summary(bm_visitors)
+
+# Predictions and instantaneous curve for BM
+pred_bm_visitors <- predict(bm_visitors, newx = 1:216)
+pred_inst_bm_visitors <- make.instantaneous(pred_bm_visitors)
+
+# Plotting BM predictions
+plot(egizio_train_df$visitors, type = "b", xlab = "Month", ylab = "Monthly Visitors", 
+     pch = 16, lty = 3, cex = 0.6, xlim = c(1, 216))
+lines(pred_inst_bm_visitors, lwd = 2, col = 2) 
+scaled_visitors <- scale(egizio_train_df$visitors)
+
+####try with shocking
+gbm1<-GBM(egizio_df$visitors, shock = "exp", nshock = 1, alpha = 0.04,prelimestimates = c(1.878697e+07, 1.642189e-03, 9.073474e-03, 175
+                  , -0.1, 0.5))    #this model the shock of 2015
+summary(gbm1)
+   
+
+gbm2<-GBM(egizio_train_df$visitors, shock = "exp", nshock = 2, alpha = 0.04,prelimestimates = c(1.878697e+07, 1.642189e-03, 9.073474e-03, 135, -0.1, 0.5, 165 , -0.1, -0.5))
+summary(gbm2)   #this model both the 2015 and covid shock 
+
+gbm3 <- GBM(egizio_df$visitors, shock = "rett", nshock = 2,
+                      prelimestimates = c(1.878697e+07, 1.642189e-03, 9.073474e-03, 135, 145, 0.1, 205, 210, -0.4),oos=10)
+summary(gbm3)
+gbm4<- GBM(egizio_df$visitors, shock = "exp", nshock = 3,
+                      prelimestimates = c(1.878697e+07, 1.642189e-03, 9.073474e-03,  125, -0.1, 0.2, 160, 0.1, -0.4, 200, -0.1, +0-6))
+summary(gbm4)
+gbm5 <- GBM(egizio_df$visitors, shock = "exp", nshock = 2,
+                      prelimestimates = c(1.878697e+07, 1.642189e-03, 9.073474e-03, 135, -0.4, 0.3, 195,-0.1, 0.2))
+
+summary(gbm5)
+
+
+gbm6 <- GBM(egizio_df$visitors, shock = "mixed", nshock = 2,
+            prelimestimates = c(1.878697e+07, 1.642189e-03, 9.073474e-03, 125, -0.1, 0.2, 205, 210, -0.4),oos=10)
+summary(gbm6)
+pred_GBM11_visitors<- predict(gbm6, newx=c(1:230))
+pred_GBM11_visitors.inst<- make.instantaneous(pred_GBM11_visitors)
+
+# Plotting GBMe1 predictions
+plot(egizio_df$visitors, type = "b", xlab = "Month", ylab = "Monthly Visitors", 
+     pch = 16, lty = 3, cex = 0.6, xlim = c(1, 216))
+lines(pred_GBM11_visitors.inst, lwd = 2, col = 2)
+#############
+GGM_tw<- GGM(egizio_df$visitors, prelimestimates=c(1.878697e+07, 0.001, 0.01,1.642189e-03, 9.073474e-03))
+summary(GGM_tw)
+
+pred_GGM_tw<- predict(GGM_tw, newx=c(1:230))
+pred_GGM_tw.inst<- make.instantaneous(pred_GGM_tw)
+
+plot(egizio_df$visitors, type= "b",xlab="Quarter", ylab="Monthly Visitors",  pch=16, lty=3, cex=0.6, xlim=c(1,60))
+lines(pred_GGM_tw.inst, lwd=2, col=2)
+
+###Analysis of residuals
+res_GGMtw<- residuals(GGM_tw)
+acf<- acf(residuals(GGM_tw))
+
+
+fit_GGMtw<- fitted(GGM_tw)
+fit_GGMtw_inst<- make.instantaneous(fit_GGMtw)
+
 
 # --------------------------------------------------------------------- #
 # Model - Boosting

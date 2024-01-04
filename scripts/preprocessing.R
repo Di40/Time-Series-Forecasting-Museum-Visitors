@@ -115,7 +115,46 @@ str(italy_holidays_df)
 print("Count of NAs in each column:")
 print(colSums(is.na(italy_holidays_df)))
 
-# ToDo: Find and load number of tourists data.
+# ---------------------------------------------------------------------------- #
+# Read Turin arrivals data 
+turin_arrivals_df <- read.csv("../data/Turin_arrivals.csv")
+str(turin_arrivals_df)
+
+turin_arrivals_df$date <- as.Date(as.yearmon(turin_arrivals_df$date))
+
+str(turin_arrivals_df)
+
+# print("Count of NAs in each column:")
+# print(colSums(turin_arrivals_df))
+
+# ---------------------------------------------------------------------------- #
+# Read Covid-19_closures data
+covid_closures_df <- read.csv("../data/Covid19_closures.csv")
+
+covid_closures_df$date <- as.Date(as.yearmon(paste(covid_closures_df$year,
+                                                   covid_closures_df$month,
+                                                  sep = "-")))
+
+
+str(covid_closures_df)
+
+covid_closures_df <- covid_closures_df[, c('date', 'Covid_closures')]
+
+print("Count of NAs in each column:")
+print(colSums(is.na(covid_closures_df)))
+
+# ---------------------------------------------------------------------------- #
+# ---------------------------------------------------------------------------- #
+# Read Museum renovation
+egizio_renovation_df <- read.csv("../data/museo_egizio_renovation.csv")
+
+egizio_renovation_df$date <- as.Date(as.yearmon(paste(egizio_renovation_df$year,
+                                                      egizio_renovation_df$month,
+                                                   sep = "-")))
+egizio_renovation_df <- egizio_renovation_df[, c('date', 'renovation')]
+
+print("Count of NAs in each column:")
+print(colSums(is.na(egizio_renovation_df)))
 
 # ---------------------------------------------------------------------------- #
 # Concatenate dataframes
@@ -123,8 +162,14 @@ print(colSums(is.na(italy_holidays_df)))
 egizio_df <- merge(egizio_visitors_df, egizio_googletrends_df, by = "date", all.x = TRUE)
 egizio_df <- merge(egizio_df, turin_weather_df, by = "date", all.x = TRUE)
 egizio_df <- merge(egizio_df, italy_holidays_df, by = "date", all.x = TRUE)
+egizio_df <- merge(egizio_df, turin_arrivals_df, by = "date", all.x = TRUE)
+egizio_df <- merge(egizio_df, covid_closures_df, by = "date", all.x = TRUE)
+egizio_df <- merge(egizio_df, egizio_renovation_df, by = "date", all.x = TRUE)
 
 str(egizio_df)
+
+# print("Count of NAs in each column:")
+# aprint(colSums(egizio_df))
 
 # write.csv(egizio_df, "../data/egizio_final.csv", row.names = FALSE)
 # csv doesn't store information about the changed variable types.
