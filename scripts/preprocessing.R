@@ -7,6 +7,8 @@ library(zoo)
 library(lubridate)
 library(ggplot2)
 
+rm(list=ls())
+
 # Change working directory
 script_path <- rstudioapi::getSourceEditorContext()$path
 script_dir <- dirname(script_path)
@@ -87,7 +89,7 @@ turin_weather_df$date <- as.Date(as.yearmon(paste(turin_weather_df$year,
                                                   turin_weather_df$month,
                                                   sep = "-")))
 
-turin_weather_df$raining_days <- factor(turin_weather_df$raining_days, ordered = TRUE, levels = 0:31)
+# turin_weather_df$raining_days <- factor(turin_weather_df$raining_days, ordered = TRUE, levels = 0:31)
 
 # Drop 'year' and 'month' and reorganize columns
 turin_weather_df <- turin_weather_df[, c('date', 'average_temperature', 'raining_days')]
@@ -108,7 +110,7 @@ italy_holidays_df$date <- as.Date(as.yearmon(paste(italy_holidays_df$year,
 italy_holidays_df <- italy_holidays_df[, c('date', 'hl_sch')]
 names(italy_holidays_df)[names(italy_holidays_df) == "hl_sch"] <- "school_holidays" # Rename
 
-italy_holidays_df$school_holidays <- factor(italy_holidays_df$school_holidays, ordered = TRUE, levels = 0:31)
+# italy_holidays_df$school_holidays <- factor(italy_holidays_df$school_holidays, ordered = TRUE, levels = 0:31)
 
 str(italy_holidays_df)
 
@@ -124,8 +126,8 @@ turin_arrivals_df$date <- as.Date(as.yearmon(turin_arrivals_df$date))
 
 str(turin_arrivals_df)
 
-# print("Count of NAs in each column:")
-# print(colSums(turin_arrivals_df))
+print("Count of NAs in each column:")
+print(colSums(is.na(turin_arrivals_df)))
 
 # ---------------------------------------------------------------------------- #
 # Read Covid-19_closures data
@@ -135,6 +137,9 @@ covid_closures_df$date <- as.Date(as.yearmon(paste(covid_closures_df$year,
                                                    covid_closures_df$month,
                                                   sep = "-")))
 
+# Do we need to convert the binary variables to factor?
+# Probably no, but it can be useful for standardization, to avoid standardizing it.
+covid_closures_df$Covid_closures <- as.factor(covid_closures_df$Covid_closures)
 
 str(covid_closures_df)
 
@@ -144,14 +149,19 @@ print("Count of NAs in each column:")
 print(colSums(is.na(covid_closures_df)))
 
 # ---------------------------------------------------------------------------- #
-# ---------------------------------------------------------------------------- #
 # Read Museum renovation
 egizio_renovation_df <- read.csv("../data/museo_egizio_renovation.csv")
 
 egizio_renovation_df$date <- as.Date(as.yearmon(paste(egizio_renovation_df$year,
                                                       egizio_renovation_df$month,
                                                    sep = "-")))
+
+# Same as above, done for simplifying standardization.
+egizio_renovation_df$renovation <- as.factor(egizio_renovation_df$renovation)
+
 egizio_renovation_df <- egizio_renovation_df[, c('date', 'renovation')]
+
+str(egizio_renovation_df)
 
 print("Count of NAs in each column:")
 print(colSums(is.na(egizio_renovation_df)))
@@ -168,14 +178,13 @@ egizio_df <- merge(egizio_df, egizio_renovation_df, by = "date", all.x = TRUE)
 
 str(egizio_df)
 
-# print("Count of NAs in each column:")
-# aprint(colSums(egizio_df))
+print("Count of NAs in each column:")
+print(colSums(is.na(egizio_df)))
 
 # write.csv(egizio_df, "../data/egizio_final.csv", row.names = FALSE)
 # csv doesn't store information about the changed variable types.
 # So, we use RDS (R Data Serialization) file instead.
 
 saveRDS(egizio_df, file = "../data/egizio_final.rds")
-
 
 # ToDo: Perform preprocessing for the other museums.
