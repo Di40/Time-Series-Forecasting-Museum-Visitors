@@ -835,6 +835,104 @@ res_GGM <- residuals(GGM_model)
 acf <- acf(res_GGM)
 
 # --------------------------------------------------------------------- #
+# Model 6 - Shock
+
+bm_visitors <- BM(egizio_train_df$visitors, display = TRUE)
+summary(bm_visitors)
+
+# Predictions and instantaneous curve for BM
+pred_bm_visitors <- predict(bm_visitors, newx = 1:216)
+pred_inst_bm_visitors <- make.instantaneous(pred_bm_visitors)
+
+# Plotting BM predictions
+plot(egizio_train_df$visitors, type = "b", xlab = "Month", ylab = "Monthly Visitors", 
+     pch = 16, lty = 3, cex = 0.6, xlim = c(1, 216))
+lines(pred_inst_bm_visitors, lwd = 2, col = 2)
+
+# Try with shock
+
+# This models the shock of 2015
+gbm1 <- GBM(egizio_df$visitors, shock = "exp", nshock = 1, alpha = 0.04,
+            prelimestimates = c(1.878697e+07, 1.642189e-03, 9.073474e-03, 175 , -0.3, 0.5))
+summary(gbm1)
+
+# This models both the 2015 and Covid shock    
+gbm2 <- GBM(egizio_df$visitors, shock = "exp", nshock = 2, alpha = 0.04,
+            prelimestimates = c(1.878697e+07, 1.642189e-03, 9.073474e-03, 175, -0.1, 0.5, 165 , -0.1, -0.5))
+
+summary(gbm2)   
+
+gbm3 <- GBM(egizio_df$visitors, shock = "rett", nshock = 2,
+            prelimestimates = c(1.878697e+07, 1.642189e-03, 9.073474e-03, 135, 145, 0.1, 205, 210, -0.4),oos=10)
+summary(gbm3)
+
+gbm4<- GBM(egizio_df$visitors, shock = "exp", nshock = 3,
+           prelimestimates = c(1.878697e+07, 1.642189e-03, 9.073474e-03,  125, -0.1, 0.2, 160, 0.1, -0.4, 200, -0.1, +0-6))
+summary(gbm4)
+
+gbm5 <- GBM(egizio_train_df$visitors, shock = "exp", nshock = 2,
+            prelimestimates = c(1.878697e+07, 1.642189e-03, 9.073474e-03, 130, -0.1, 0.5, 155,-0.1, -0.1))
+summary(gbm5)
+
+gbm6 <- GBM(egizio_train_df$visitors, shock = "mixed", nshock = 2,
+            prelimestimates = c(1.878697e+07, 1.642189e-03, 9.073474e-03, 125, -0.1, 0.2, 165, 185, -0.4),oos=10)
+summary(gbm6)
+
+pred_GBM11_visitors<- predict(gbm6, newx=c(1:230))
+pred_GBM11_visitors.inst<- make.instantaneous(pred_GBM11_visitors)
+
+# Plotting GBMe1 predictions
+plot(egizio_df$visitors, type = "b", xlab = "Month", ylab = "Monthly Visitors", 
+     pch = 16, lty = 3, cex = 0.6, xlim = c(1, 216))
+lines(pred_GBM11_visitors.inst, lwd = 2, col = 2)
+
+checkresiduals(gbm6)
+
+
+## COMBINED MODEL: GBM + Rectangular Shock - ARMAX for residuals
+regressors =  as.matrix(egizio_train_df[,-c(4)])
+regressors <- apply(regressors[, -1], 2, as.numeric)
+res_gbmr1 = make.instantaneous(gbm6$residuals)
+Acf(res_gbmr1)
+Pacf(res_gbmr1)
+str(egizio_df)
+egizio_df$date<- as.numeric(egizio_df$date)
+arima_res_gbmr1 = auto.arima(res_gbmr1, xreg = regressors)
+arima_res_gbmr1
+
+ggplot(data = egizio_train_df,
+       aes(x = date, y = res_gbmr1))+
+  geom_point(color = "black")+
+  geom_line(aes(y = arima_res_gbmr1$fitted), color = "red")+
+  xlab("Date")+
+  ylab("Residuals")+
+  ggtitle("Real residuals vs. Fitted values with ARMAX")
+
+
+ggplot(data = egizio_train_df,
+       aes(x = date, 
+           y = arima_res_gbmr1$residuals))+
+  geom_point(color = "blue")+
+  xlab("Date")+
+  ylab("Residuals")+
+  ggtitle("Residuals Plot of ARMAX Model for Residuals")
+
+
+vis_fitted_gbmr1 = make.instantaneous(gbm6$fitted) + 
+  arima_res_gbmr1$fitted
+
+ggplot(data = egizio_train_df,
+       aes(x = date, y = visitors))+
+  geom_point(color = "black")+
+  geom_line(aes(y = vis_fitted_gbmr1), color = "red")+
+  xlab("Date")+
+  ggtitle("Visitors vs. Fitted values with Combined Model: GBM + ARMAX")
+
+
+GBMe1_res = make.instantaneous(gbm6$residuals)
+
+
+
 # Model 8 - Boosting
 
 # Modify graphical parameters
@@ -1728,3 +1826,333 @@ ggplot(egizio_predictions_df, aes(x = date)) +
        x = "Date",
        y = "Values") +
   scale_color_manual(values = c("Visitors" = "red", "Predicted" = "blue"))
+
+#++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+#Model 9
+## LOCAL REGRESSION
+
+library(sm)
+
+# This function creates a nonparametric regression estimate from 
+# data consisting of a single response variable and one or two 
+# covariates.
+
+# x = vector/two-columns matrix of covariates
+#     --> we consider the two best variables looking at the
+#         previous results of the arima models for the residuals:
+#         - Inflation
+#         - NECarSales
+#         (they are already contained in the "regressors" matrix)
+
+# y = vector of response
+
+x = regressors
+y = egizio_train_df$visitors
+
+# Model with the Inflation covariate ??
+
+plot(egizio_visitors_train_ts)
+
+sm.regression(x[,1], y, h = 100, add = T, col = 2)
+sm.regression(x[,1], y,   h = 10, add = T, ngrid=200, col=3)
+sm.regression(x[,1], y,   h = 30, ngrid=200, col=4)
+sm.regression(x[,1], y,   h = 50, add = T, ngrid=200, col=5)
+sm.regression(x[,1], y,   h = 5,  add = T, ngrid=200, col=6)
+sm.regression(x[,1], y,   h = 1,  add = T, col=7, ngrid=200)
+
+
+#We add variability bands
+sm.regression(x[,1], y,   h = 30, ngrid=200, display="se")
+
+
+
+## LOESS
+
+# the x and y arguments provide the x and y coordinates for the 
+# plot. 
+
+
+x = 1:204
+y = egizio_train_df$visitors
+egizio_train_df$date<- as.numeric(egizio_train_df$date)
+
+# We use geom_smooth in order to graphically see the results
+
+ggplot( data = egizio_train_df, 
+        aes(x =date, y = visitors))+
+  geom_point()+
+  xlab("Date")+
+  ylab("Visitors")+
+  ggtitle("Loess Model for Egizio Visitors")+
+  geom_smooth(method = "loess", span = 2/3)
+
+# We use the loess.smooth method for computing the values.
+
+loess1_ecar <- loess.smooth(x,y) # span = 2/3
+
+ggplot( data = egizio_train_df, 
+        aes(x =date, y = egizio_train_df$visitors))+
+  geom_point()+
+  xlab("Date")+
+  ylab("Visitors")+
+  ggtitle("Loess Model for Egizio Visitors")+
+  geom_smooth(method = "loess", span = 0.9, color = "red")
+loess2_ecar <- loess.smooth(x,y, span = 0.9) 
+
+
+ggplot( data = egizio_train_df, 
+        aes(x = date, y = egizio_train_df$visitors))+
+  geom_point()+
+  xlab("Date")+
+  ylab("ECarSales")+
+  ggtitle("Loess Model for Egizio Visitors")+
+  geom_smooth(method = "loess", span = 0.4, color = "green")
+
+loess2_ecar <- loess.smooth(x,y, span = 0.4) 
+
+
+# Complete comparison:
+
+ggplot( data = egizio_train_df, 
+        aes(x = date, y =visitors))+
+  geom_point()+
+  xlab("Date")+
+  ylab("ECarSales")+
+  ggtitle("Loess Model for ECarSales")+
+  geom_smooth(method = "loess", span = 2/3, se = F)+
+  geom_smooth(method = "loess", span = 0.9, 
+              color = "red", se = F)+
+  geom_smooth(method = "loess", span = 0.4, 
+              color = "green", se = F)+
+  geom_smooth(method = "loess", span = 0.25, 
+              color = "yellow", se = F)+
+  geom_smooth(method = "loess", span = 0.1, 
+              color = "orange", se = F)
+
+# The orange one is the nearest to our model, but the best
+# compromise is given by the yellow one.
+
+# Smallest is the "span" value --> better is the interpolation
+
+
+
+
+## CUBIC SPLINES
+
+library(splines)
+
+x = 1:204
+y = egizio_train_df$visitors
+
+# We may select the internal-knots by using the degrees of 
+# freedom: 
+
+# (basic functions b-spline for a cubic spline (degree=3))
+
+# --> df directly related to the number of knots
+#     df = length(knots) + degree 
+# The knots are selected by using the quantiles of 'x' 
+# distribution 
+
+ggplot( data = egizio_train_df, 
+        aes(x = date, y = visitors))+
+  geom_point()+
+  xlab("Date")+
+  ylab("Visitors")+
+  ggtitle("Loess Model for Visitors")
+
+
+# DEGREE 3
+
+# Starting with 2 internal-knots
+
+splines3_2 = lm(y ~ bs(x, df = 5, degree = 3)) 
+summary(splines3_2) # 0.8663
+
+# 2-5 not significant
+# 1-3-4 significant
+
+ggplot( data = egizio_train_df, 
+        aes(x = date, y = visitors))+
+  geom_point()+
+  xlab("Date")+
+  ylab("Visitors")+
+  ggtitle("Loess Model for Egizio Visitors")+
+  geom_line(aes(y = splines3_2$fitted.values, color = "red"))
+
+
+# Proceeding with 4 internal-knots
+
+splines3_4 = lm(y ~ bs(x, df = 7, degree = 3)) 
+summary(splines3_4) # 0.8748
+
+# 1-3-5 not significant
+# 2-4-6-7 significant
+
+ggplot( data = egizio_train_df, 
+        aes(x = date, y = visitors))+
+  geom_point()+
+  xlab("Date")+
+  ylab("Visitors")+
+  ggtitle("Loess Model for visitors")+
+  geom_line(aes(y = splines3_4$fitted.values, color = "yellow"))
+
+
+# Model with no internal-knots
+
+splines3_0 = lm(y ~ bs(x, df = 3, degree = 3)) 
+summary(splines3_0) # 0.9063
+# 3-5-6-7 significant
+
+ggplot( data =  egizio_train_df, 
+        aes(x = date, y =visitors))+
+  geom_point()+
+  xlab("Date")+
+  ylab("Visitors")+
+  ggtitle("Loess Model for visitors")+
+  geom_line(aes(y = splines3_0$fitted.values, color = "red"))
+
+
+# Model with 8 internal-knots
+
+splines3_8 = lm(y ~ bs(x, df = 11, degree = 3)) 
+summary(splines3_8) # 0.7851
+
+
+ggplot( data = egizio_train_df, 
+        aes(x = date, y = visitors))+
+  geom_point()+
+  xlab("Date")+
+  ylab("Visitors")+
+  ggtitle("Loess Model for Egizio Visitors")+
+  geom_line(aes(y = splines3_8$fitted.values, color = "red"))
+
+# Best with degree = 3 --> 8 internal knots, df = 11
+
+
+# DEGREE 4
+
+
+# Starting with 2 internal-knots
+
+splines4_2 = lm(y ~ bs(x, df = 6, degree = 4)) 
+summary(splines4_2) # 0.8333
+
+# 2-3-4 not significant
+# 1-5-6 not significant
+
+ggplot( data = egizio_train_df, 
+        aes(x = date, y = visitors))+
+  geom_point()+
+  xlab("Date")+
+  ylab("Visitors")+
+  ggtitle("Loess Model for Egizio Visitors")+
+  geom_line(aes(y = splines4_2$fitted.values, color = "red"))
+
+
+# Proceeding with 4 internal-knots
+
+splines4_4 = lm(y ~ bs(x, df = 8, degree = 4)) 
+summary(splines4_4) # 0.7971
+# 1-2-3-4 not significant
+# 5-6-7-8 significant
+
+ggplot( data = egizio_train_df, 
+        aes(x = date, y = visitors))+
+  geom_point()+
+  xlab("Date")+
+  ylab("Visitors")+
+  ggtitle("Loess Model for Visitors")+
+  geom_line(aes(y = splines4_4$fitted.values, color = "red"))
+
+
+# Model with no internal-knots
+
+splines4_0 = lm(y ~ bs(x, df = 4, degree = 4)) 
+summary(splines4_0) # 0.8818
+
+# 1-2-3 significant
+# 4 not significant
+
+ggplot( data = egizio_train_df, 
+        aes(x = date, y = visitors))+
+  geom_point()+
+  xlab("Date")+
+  ylab("Visitors")+
+  ggtitle("Loess Model for Visitors")+
+  geom_line(aes(y = splines4_0$fitted.values, color = "red"))
+
+
+# Model with 8 internal-knots
+
+splines4_8 = lm(y ~ bs(x, df = 12, degree = 4)) 
+summary(splines4_8) # 0.7926
+
+# 1-2-3-4-5-6-8-10-11 not significant
+# 7-9-12 significant
+
+ggplot( data = egizio_train_df, 
+        aes(x = date, y = visitors))+
+  geom_point()+
+  xlab("Date")+
+  ylab("Visitors")+
+  ggtitle("Loess Model for Visitors")+
+  geom_line(aes(y = splines4_8$fitted.values, color = "red"))
+
+
+# With degree = 4 we are not able to find something better than
+# the model we would choose with degree = 3.  need to think
+
+
+## SMOOTHING SPLINES
+
+# Basic smooth splines
+
+ggplot( data = egizio_train_df, 
+        aes(x = date, y = visitors))+
+  geom_point()+
+  xlab("Date")+
+  ylab("Visitors")+
+  ggtitle("Loess Model for Egizio Visitors")
+
+sm_spline = npreg::ss(x,y, method = "AIC")
+
+ggplot( data = egizio_train_df, 
+        aes(x = date, y = visitors))+
+  geom_point()+
+  xlab("Date")+
+  ylab("Visitors")+
+  ggtitle("Loess Model for Egizio Visitors")+
+  geom_line(aes(y = sm_spline$y, color = "red"))
+
+
+# Model 1
+
+sm_spline1 = npreg::ss(x,y, method = "AIC", lambda = 0.000001,
+                       all.knots = T)
+
+ggplot( data = egizio_train_df, 
+        aes(x = date, y = visitors))+
+  geom_point()+
+  xlab("Date")+
+  ylab("Visitors")+
+  ggtitle("Loess Model for Visitors")+
+  geom_line(aes(y = sm_spline1$y, color = "red"))
+
+
+# Model with Cross Validation Method for parameter selection
+
+sm_spline_gcv = npreg::ss(x,y, method = "GCV")
+
+ggplot( data = egizio_train_df, 
+        aes(x = date, y = visitors))+
+  geom_point()+
+  xlab("Date")+
+  ylab("Visitors")+
+  ggtitle("Loess Model for Visitors")+
+  geom_line(aes(y = sm_spline_gcv$y, color = "red"))
+
+sm_spline_gcv
+
+
+
