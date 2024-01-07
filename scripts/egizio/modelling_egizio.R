@@ -1517,7 +1517,7 @@ ggplot(egizio_predictions_df, aes(x = date)) +
 # giving to the model an "accumulated information" through time:
 
 egizio_visitors_ts <- ts(c(egizio_train_df$visitors, egizio_test_df$visitors))
-
+egizio_visitors_train_ts <- ts(egizio_train_df$visitors,12)
 png("../../plots/arima_plots.png", width = 1000, height = 1500)
 # mfrow.old <- par()$frow
 # mar.old <- par()$mar
@@ -2153,6 +2153,95 @@ ggplot( data = egizio_train_df,
   geom_line(aes(y = sm_spline_gcv$y, color = "red"))
 
 sm_spline_gcv
+#++++++++++++++++++++++++++++++++++++++++++
+#+++++++++++++++HOLT WINTERS+++++++++++++++
+#++++++++++++++++++++++++++++++++++++++++++
+
+egizio_visitors_ts <- ts(egizio_train_df$visitors, frequency = 12)
+components_dfts <- decompose(egizio_visitors_ts)
+plot(components_dfts)
+HW1 <- HoltWinters(egizio_visitors_ts)  #Smoothing parameters:alpha: 0.6785537, beta : 0.007338514, gamma: 1
+HW2 <- HoltWinters(egizio_visitors_ts, alpha=0.2, beta=0.1, gamma=0.1)
+#Visually evaluate the fits
+plot(egizio_visitors_ts, ylab="egizio visitors")
+lines(HW1$fitted[,1], lty=2, col="blue")
+lines(HW2$fitted[,1], lty=2, col="red")
+#predictions with predict
+HW1.pred <- predict(HW1, 12, prediction.interval = TRUE, level=0.95)
+#Visually evaluate the prediction
+plot(egizio_visitors_ts, ylab="visitors")
+lines(HW1$fitted[,1], lty=2, col="blue")
+lines(HW1.pred[,1], col="red")
+lines(HW1.pred[,2], lty=2, col="orange")
+lines(HW1.pred[,3], lty=2, col="orange")
+
+egizio_predictions_df$predicted_HW1 <- predict(HW1, 12, prediction.interval = TRUE, level=0.95)
+
+# Calculate metrics
+mse <- mse(egizio_test_df$visitors, egizio_predictions_df$predicted_HW1)
+rmse <- rmse(egizio_test_df$visitors, egizio_predictions_df$predicted_HW1)
+mae <- mae(egizio_test_df$visitors, egizio_predictions_df$predicted_HW1)
+mape <- mape(egizio_test_df$visitors, egizio_predictions_df$predicted_HW1)
+sse1<- sse(egizio_test_df$visitors, egizio_predictions_df$predicted_HW1)
+metrics_df <- rbind(metrics_df, list(Model = "HW1",
+                                     R2 = NA, R2_adj = NA,
+                                     MSE = mse, RMSE = rmse, MAE = mae,
+                                     MAPE = mape, AIC = NA))
+print(metrics_df)
+
+#For HW2
+plot(egizio_visitors_ts, ylab="egizio visitors")
+HW2.pred <- predict(HW2, 12, prediction.interval = TRUE, level=0.95)
+#Visually evaluate the prediction
+plot(egizio_visitors_ts, ylab="visitors")
+lines(HW2$fitted[,1], lty=2, col="blue")
+lines(HW2.pred[,1], col="red")
+lines(HW2.pred[,2], lty=2, col="orange")
+lines(HW2.pred[,3], lty=2, col="orange")
+
+egizio_predictions_df$predicted_HW2 <- predict(HW2, 12, prediction.interval = TRUE, level=0.95)
+
+# Calculate metrics
+mse <- mse(egizio_test_df$visitors, egizio_predictions_df$predicted_HW2)
+rmse <- rmse(egizio_test_df$visitors, egizio_predictions_df$predicted_HW2)
+mae <- mae(egizio_test_df$visitors, egizio_predictions_df$predicted_HW2)
+mape <- mape(egizio_test_df$visitors, egizio_predictions_df$predicted_HW2)
+sse2 <- sse(egizio_test_df$visitors, egizio_predictions_df$predicted_HW2)
+metrics_df <- rbind(metrics_df, list(Model = "HW1",
+                                     R2 = NA, R2_adj = NA,
+                                     MSE = mse, RMSE = rmse, MAE = mae,
+                                     MAPE = mape, AIC = NA))
+print(metrics_df)
+metrics_df
+######for forecasting
+
+HW1_for <- forecast(HW1, h=12, level=c(80,95))
+#visualize our predictions:
+plot(HW1_for)
+lines(HW1_for$fitted, lty=2, col="purple")
 
 
+HW2_for <- forecast(HW2, h=12, level=c(80,95))
+#visualize our predictions:
+plot(HW2_for)
+lines(HW2_for$fitted, lty=2, col="green")
 
+#let's check the residuals
+acf(HW1_for$residuals, lag.max=20, na.action=na.pass)
+Box.test(HW1_for$residuals, lag=20, type="Ljung-Box")
+hist(HW1_for$residuals)
+
+#let's check the residuals
+acf(HW2_for$residuals, lag.max=20, na.action=na.pass)
+Box.test(HW2_for$residuals, lag=20, type="Ljung-Box")
+hist(HW2_for$residuals)
+
+
+############for multiplicative seasonality probably doesn't work
+HW3 <- HoltWinters(egizio_visitors_ts, seasonal = "multiplicative")
+HW3.pred <- predict(HW3, 12, prediction.interval = TRUE, level=0.95)
+plot(egizio_visitors_ts, ylab="Visitors")
+lines(HW3$fitted[,1], lty=2, col="blue")
+lines(HW3.pred[,1], col="red")
+lines(HW3.pred[,2], lty=2, col="orange")
+lines(HW3.pred[,3], lty=2, col="orange")
