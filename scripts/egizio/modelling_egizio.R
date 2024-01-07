@@ -286,6 +286,68 @@ plot(egizio_train_df$date, res_lm, xlab="date", ylab="Residuals", type= "b",  pc
 plot(Acf(res_lm), xlab = "Lag", main = "Autocorrelation of Residuals",
      col = "steelblue", lwd = 2.5, ci.col = "black", cex.lab = 1.2, cex.main = 1.5)
 
+
+########## hybrid stepwise selection
+library(MASS)
+selected_model <- stepAIC(all_features_regression, direction = "both")
+summary(selected_model)
+egizio_predictions_df$predicted_multiple_lr_stepAIC<- predict(selected_model, newdata = egizio_test_df)
+
+# Calculate metrics
+r_squared <- summary(selected_model)$r.squared
+adj_r_squared <- summary(selected_model)$adj.r.squared
+aic <- AIC(selected_model)
+mse <- mse(egizio_test_df$visitors, egizio_predictions_df$predicted_multiple_lr_stepAIC)
+rmse <- rmse(egizio_test_df$visitors, egizio_predictions_df$predicted_multiple_lr_stepAIC)
+mae <- mae(egizio_test_df$visitors, egizio_predictions_df$predicted_multiple_lr_stepAIC)
+mape <- mape(egizio_test_df$visitors, egizio_predictions_df$predicted_multiple_lr_stepAIC)
+
+metrics_df <- rbind(metrics_df, list(Model = "Multiple LR_stepwise",
+                                     R2 = r_squared, R2_adj = adj_r_squared,
+                                     MSE = mse, RMSE = rmse, MAE = mae,
+                                     MAPE = mape, AIC = aic))
+print(metrics_df)
+
+selected_model_backward <- stepAIC(all_features_regression, direction = "backward")
+summary(selected_model_backward)
+egizio_predictions_df$predicted_multiple_lr_stepAIC_backward<- predict(selected_model_backward, newdata = egizio_test_df)
+
+# Calculate metrics
+r_squared <- summary(selected_model_backward)$r.squared
+adj_r_squared <- summary(selected_model_backward)$adj.r.squared
+aic <- AIC(selected_model_backward)
+mse <- mse(egizio_test_df$visitors, egizio_predictions_df$predicted_multiple_lr_stepAIC_backward)
+rmse <- rmse(egizio_test_df$visitors, egizio_predictions_df$predicted_multiple_lr_stepAIC_backward)
+mae <- mae(egizio_test_df$visitors, egizio_predictions_df$predicted_multiple_lr_stepAIC_backward)
+mape <- mape(egizio_test_df$visitors, egizio_predictions_df$predicted_multiple_lr_stepAIC_backward)
+
+metrics_df <- rbind(metrics_df, list(Model = "Multiple LR_stepwise_backward",
+                                     R2 = r_squared, R2_adj = adj_r_squared,
+                                     MSE = mse, RMSE = rmse, MAE = mae,
+                                     MAPE = mape, AIC = aic))
+print(metrics_df)
+
+ggplot(egizio_predictions_df, aes(x = date)) +
+  geom_line(aes(y = visitors_true, color = "Visitors"), size = 1) +
+  geom_line(aes(y = predicted_multiple_lr_stepAIC, color = "Predicted"),
+            linetype = "dashed", size = 1) +
+  labs(title = "Visitors and Predicted Values Over Time",
+       x = "Date",
+       y = "Values") +
+  scale_color_manual(values = c("Visitors" = "red", "Predicted" = "blue"))
+
+# DW test
+dwtest(selected_model)
+# The p-value is extremely small. => There is autocorrelation in the residuals.
+
+# Check the residuals
+res_lm_stepaic <- residuals(selected_model)
+plot(egizio_train_df$date, res_lm_stepaic, xlab="date", ylab="Residuals", type= "b",  pch=16, lty=3, cex=0.6)
+
+plot(Acf(res_lm_stepaic), xlab = "Lag", main = "Autocorrelation of Residuals",
+     col = "steelblue", lwd = 2.5, ci.col = "black", cex.lab = 1.2, cex.main = 1.5)
+
+
 # ---------------------------------------------------------------------------- #
 # Model 2 - TSLM with trend and seasonality
 egizio_visitors_train_ts <- ts(egizio_train_df$visitors, frequency = 12)
@@ -406,6 +468,11 @@ ggplot(egizio_predictions_df, aes(x = date)) +
        x = "Date",
        y = "Values") +
   scale_color_manual(values = c("Visitors" = "red", "Predicted" = "blue"))
+
+#########STEPWISE SELECTION
+
+#selected_model <- stepAIC(tslm_full, direction = "both")
+#summary(selected_model)
 
 # --------------------------------------------------------------------- #
 # Model 4 - TSLM feature selection
