@@ -3,6 +3,7 @@
 # ---------------------------------------------------------------------------- #
 
 rm(list=ls())
+graphics.off()
 
 # Imports
 library(ggplot2)
@@ -19,6 +20,10 @@ library(glmnet)
 library(dplyr)
 library(gam)
 library(gridExtra)
+library(MASS)
+library(sm)
+library(splines)
+library(npreg)
 
 # Change working directory
 script_path <- rstudioapi::getSourceEditorContext()$path
@@ -244,6 +249,7 @@ egizio_test_df <- data.frame(egizio_test_df_old)
 # Model 1 - Multiple LR
 
 str(egizio_train_df)
+
 all_features_regression <- lm(visitors ~ . - date, data = egizio_train_df)
 # Month and quarter were perfectly collinear, so we have removed the quarter.
 summary(all_features_regression)
@@ -286,72 +292,49 @@ plot(egizio_train_df$date, res_lm, xlab="date", ylab="Residuals", type= "b",  pc
 plot(Acf(res_lm), xlab = "Lag", main = "Autocorrelation of Residuals",
      col = "steelblue", lwd = 2.5, ci.col = "black", cex.lab = 1.2, cex.main = 1.5)
 
+# ---------------------------------------------------------------------------- #
+# Model 2 - Multiple LR - Stepwise
 
-########## hybrid stepwise selection
-library(MASS)
-selected_model <- stepAIC(all_features_regression, direction = "both")
-summary(selected_model)
-egizio_predictions_df$predicted_multiple_lr_stepAIC<- predict(selected_model, newdata = egizio_test_df)
+# Hybrid
+stepwise_lr_selected_model <- stepAIC(all_features_regression, direction = "both")
+summary(stepwise_lr_selected_model)
+
+egizio_predictions_df$predicted_multiple_lr_stepAIC<- predict(stepwise_lr_selected_model, newdata = egizio_test_df)
 
 # Calculate metrics
-r_squared <- summary(selected_model)$r.squared
-adj_r_squared <- summary(selected_model)$adj.r.squared
-aic <- AIC(selected_model)
+r_squared <- summary(stepwise_lr_selected_model)$r.squared
+adj_r_squared <- summary(stepwise_lr_selected_model)$adj.r.squared
+aic <- AIC(stepwise_lr_selected_model)
 mse <- mse(egizio_test_df$visitors, egizio_predictions_df$predicted_multiple_lr_stepAIC)
 rmse <- rmse(egizio_test_df$visitors, egizio_predictions_df$predicted_multiple_lr_stepAIC)
 mae <- mae(egizio_test_df$visitors, egizio_predictions_df$predicted_multiple_lr_stepAIC)
 mape <- mape(egizio_test_df$visitors, egizio_predictions_df$predicted_multiple_lr_stepAIC)
 
-metrics_df <- rbind(metrics_df, list(Model = "Multiple LR_stepwise",
+metrics_df <- rbind(metrics_df, list(Model = "Multiple LR Stepwise Both",
                                      R2 = r_squared, R2_adj = adj_r_squared,
                                      MSE = mse, RMSE = rmse, MAE = mae,
                                      MAPE = mape, AIC = aic))
 print(metrics_df)
 
-selected_model_backward <- stepAIC(all_features_regression, direction = "backward")
-summary(selected_model_backward)
-egizio_predictions_df$predicted_multiple_lr_stepAIC_backward<- predict(selected_model_backward, newdata = egizio_test_df)
-
-# Calculate metrics
-r_squared <- summary(selected_model_backward)$r.squared
-adj_r_squared <- summary(selected_model_backward)$adj.r.squared
-aic <- AIC(selected_model_backward)
-mse <- mse(egizio_test_df$visitors, egizio_predictions_df$predicted_multiple_lr_stepAIC_backward)
-rmse <- rmse(egizio_test_df$visitors, egizio_predictions_df$predicted_multiple_lr_stepAIC_backward)
-mae <- mae(egizio_test_df$visitors, egizio_predictions_df$predicted_multiple_lr_stepAIC_backward)
-mape <- mape(egizio_test_df$visitors, egizio_predictions_df$predicted_multiple_lr_stepAIC_backward)
-
-metrics_df <- rbind(metrics_df, list(Model = "Multiple LR_stepwise_backward",
-                                     R2 = r_squared, R2_adj = adj_r_squared,
-                                     MSE = mse, RMSE = rmse, MAE = mae,
-                                     MAPE = mape, AIC = aic))
-print(metrics_df)
-
-ggplot(egizio_predictions_df, aes(x = date)) +
-  geom_line(aes(y = visitors_true, color = "Visitors"), size = 1) +
-  geom_line(aes(y = predicted_multiple_lr_stepAIC, color = "Predicted"),
-            linetype = "dashed", size = 1) +
-  labs(title = "Visitors and Predicted Values Over Time",
-       x = "Date",
-       y = "Values") +
-  scale_color_manual(values = c("Visitors" = "red", "Predicted" = "blue"))
+stepwise_lr_backward_selected_model <- stepAIC(all_features_regression, direction = "backward")
+summary(stepwise_lr_backward_selected_model)
+# We obtain the same model.
 
 # DW test
-dwtest(selected_model)
+dwtest(stepwise_lr_backward_selected_model)
 # The p-value is extremely small. => There is autocorrelation in the residuals.
 
 # Check the residuals
-res_lm_stepaic <- residuals(selected_model)
+res_lm_stepaic <- residuals(stepwise_lr_backward_selected_model)
 plot(egizio_train_df$date, res_lm_stepaic, xlab="date", ylab="Residuals", type= "b",  pch=16, lty=3, cex=0.6)
 
 plot(Acf(res_lm_stepaic), xlab = "Lag", main = "Autocorrelation of Residuals",
      col = "steelblue", lwd = 2.5, ci.col = "black", cex.lab = 1.2, cex.main = 1.5)
 
-
 # ---------------------------------------------------------------------------- #
-# Model 2 - TSLM with trend and seasonality
+# Model 3 - TSLM with trend and seasonality
 egizio_visitors_train_ts <- ts(egizio_train_df$visitors, frequency = 12)
-ts.plot(egizio_visitors_train_ts, type="o")
+plot(egizio_train_df$date, egizio_visitors_train_ts, type="o")
 
 # Fit a linear model with trend
 tslm_basic <- tslm(egizio_visitors_train_ts ~ trend + season)
@@ -397,7 +380,7 @@ ggplot(egizio_predictions_df, aes(x = date)) +
   scale_color_manual(values = c("Visitors" = "red", "Predicted" = "blue"))
 
 # --------------------------------------------------------------------- #
-# Model 3 - TSLM full (including the other features)
+# Model 4 - TSLM full (including the other features)
 
 egizio_train_ts_df <- data.frame(
   visitors = ts(egizio_train_df$visitors, frequency = 12),
@@ -469,13 +452,9 @@ ggplot(egizio_predictions_df, aes(x = date)) +
        y = "Values") +
   scale_color_manual(values = c("Visitors" = "red", "Predicted" = "blue"))
 
-#########STEPWISE SELECTION
-
-#selected_model <- stepAIC(tslm_full, direction = "both")
-#summary(selected_model)
-
 # --------------------------------------------------------------------- #
-# Model 4 - TSLM feature selection
+# Model 5 - TSLM feature selection (manual)
+# stepwise is not possible
 
 egizio_train_ts_df <- data.frame(
   visitors = ts(egizio_train_df$visitors, frequency = 12),
@@ -570,7 +549,7 @@ ggplot(egizio_predictions_df, aes(x = date)) +
   scale_color_manual(values = c("Visitors" = "red", "Predicted" = "blue"))
 
 # --------------------------------------------------------------------- #
-# Model 5 - LASSO
+# Model 6 - LASSO
 
 egizio_train_lasso_df <- data.frame(egizio_train_df)
 egizio_train_lasso_df <- egizio_train_lasso_df[, !colnames(egizio_train_lasso_df) %in% c("month", "year")]
@@ -697,7 +676,7 @@ ggplot(egizio_predictions_df, aes(x = date)) +
   scale_color_manual(values = c("Visitors" = "red", "Predicted" = "blue"))
 
 # --------------------------------------------------------------------- #
-# Model 6 - GAM
+# Model 7 - GAM
 
 # Stepwise GAM
 
@@ -737,7 +716,7 @@ AIC(g5)
 # ToDo: Compute predictions and calculate metrics.
 
 # --------------------------------------------------------------------- #
-# Model 7 - Generalized Bass Model
+# Model 8 - Generalized Bass Model
 
 egizio_train_unstandardized_df <- egizio_train_df_copy
 
@@ -835,7 +814,7 @@ res_GGM <- residuals(GGM_model)
 acf <- acf(res_GGM)
 
 # --------------------------------------------------------------------- #
-# Model 6 - Shock
+# Model 9 - Shock
 
 bm_visitors <- BM(egizio_train_df$visitors, display = TRUE)
 summary(bm_visitors)
@@ -888,16 +867,16 @@ lines(pred_GBM11_visitors.inst, lwd = 2, col = 2)
 
 checkresiduals(gbm6)
 
-
-## COMBINED MODEL: GBM + Rectangular Shock - ARMAX for residuals
-regressors =  as.matrix(egizio_train_df[,-c(4)])
+# --------------------------------------------------------------------- #
+# Model 10 - Combined Model: GBM with Rectangular Shock + ARMAX for residuals
+regressors <-  as.matrix(egizio_train_df[,-c(4)]) # Dejan: This doesn't include date.
 regressors <- apply(regressors[, -1], 2, as.numeric)
-res_gbmr1 = make.instantaneous(gbm6$residuals)
+res_gbmr1 <- make.instantaneous(gbm6$residuals)
 Acf(res_gbmr1)
 Pacf(res_gbmr1)
 str(egizio_df)
-egizio_df$date<- as.numeric(egizio_df$date)
-arima_res_gbmr1 = auto.arima(res_gbmr1, xreg = regressors)
+egizio_df$date <- as.numeric(egizio_df$date)
+arima_res_gbmr1 <- auto.arima(res_gbmr1, xreg = regressors)
 arima_res_gbmr1
 
 ggplot(data = egizio_train_df,
@@ -908,7 +887,6 @@ ggplot(data = egizio_train_df,
   ylab("Residuals")+
   ggtitle("Real residuals vs. Fitted values with ARMAX")
 
-
 ggplot(data = egizio_train_df,
        aes(x = date, 
            y = arima_res_gbmr1$residuals))+
@@ -917,28 +895,24 @@ ggplot(data = egizio_train_df,
   ylab("Residuals")+
   ggtitle("Residuals Plot of ARMAX Model for Residuals")
 
-
-vis_fitted_gbmr1 = make.instantaneous(gbm6$fitted) + 
-  arima_res_gbmr1$fitted
+vis_fitted_gbmr1 <- make.instantaneous(gbm6$fitted) + arima_res_gbmr1$fitted
 
 ggplot(data = egizio_train_df,
-       aes(x = date, y = visitors))+
-  geom_point(color = "black")+
+       aes(x = date, y = visitors)) +
+  geom_point(color = "black") +
   geom_line(aes(y = vis_fitted_gbmr1), color = "red")+
   xlab("Date")+
   ggtitle("Visitors vs. Fitted values with Combined Model: GBM + ARMAX")
 
+# GBMe1_res <- make.instantaneous(gbm6$residuals)
 
-GBMe1_res = make.instantaneous(gbm6$residuals)
-
-
-
-# Model 8 - Boosting
+# --------------------------------------------------------------------- #
+# Model 11 - Boosting
 
 # Modify graphical parameters
 mai.old <- par()$mai
 mai.new <- mai.old # new vector
-mai.new[2] <- 2.5 #new space on the left
+mai.new[2] <- 2.5 # new space on the left
 
 # This can be used visitors ~ .- visitors - date + as.numeric(date)
 boost_visitors <- gbm(visitors ~ . - date, data=egizio_train_df, 
@@ -1031,10 +1005,9 @@ plot(boost_visitors, i.var=5, n.trees = best, ylab = "visitors")
 plot(boost_visitors, i.var=6, n.trees = best, ylab = "visitors")
 plot(boost_visitors, i.var=7, n.trees = best, ylab = "visitors")
 plot(boost_visitors, i.var=8, n.trees = best, ylab = "visitors")
-# ToDo: Add another one after adding tourist data
-plot(boost_visitors, i.var=c(3,4), n.trees = best)
+plot(boost_visitors, i.var=9, n.trees = best, ylab = "visitors")
+plot(boost_visitors, i.var=c(3,7), n.trees = best)
 
-# --------------------------------------------------------------------- #
 # Time-series cross-validation
 
 ts_cv_spec <- time_series_cv(data = egizio_train_df,
@@ -1072,94 +1045,6 @@ if (run_cross_validation) {
                                  skip = 12,
                                  allowParallel = TRUE) # allow parallel processing if available
   
-  gbm_grid <- train(visitors ~ . - date,
-                    data = egizio_train_df,
-                    method = "gbm",  
-                    distribution = "gaussian",
-                    trControl = train_controls,
-                    tuneGrid = grid_boosting,
-                    verbose = FALSE)
-  
-  # View the results of the grid search
-  print(gbm_grid)
-  
-  best_model_boosting <- gbm_grid$bestTune
-  
-  final_model_boosting <- gbm(visitors ~ . - date,
-                              data = egizio_train_df,
-                              distribution = "gaussian",
-                              n.trees = best_model_boosting$n.trees,
-                              interaction.depth = best_model_boosting$interaction.depth,
-                              shrinkage = best_model_boosting$shrinkage,
-                              n.minobsinnode = best_model_boosting$n.minobsinnode)
-} else {
-  final_model_boosting <- gbm(visitors ~ . - date,
-                              data = egizio_train_df,
-                              distribution = "gaussian",
-                              n.trees = 200,
-                              interaction.depth = 7,
-                              shrinkage = 0.05,
-                              n.minobsinnode = 4)
-  
-}
-
-par(mai=mai.new)
-summary(final_model_boosting, las=1, cBar=10)
-par(mai=mai.old)
-
-egizio_predictions_df$predicted_visitors_boosting <- predict(final_model_boosting,
-                                                             newdata = egizio_test_df,
-                                                             n.trees = final_model_boosting$n.trees)
-
-egizio_training_preds <- predict(final_model_boosting,
-                                 newdata = egizio_train_df,
-                                 n.trees = final_model_boosting$n.trees)
-# Calculate metrics
-r_squared <- RSQUARE(egizio_train_df$visitors, egizio_training_preds)
-adj_r_squared <- adjusted_R2(egizio_train_df$visitors, egizio_training_preds, nrow(egizio_train_df), length(final_model_boosting$var.names))
-mse <- mse(egizio_test_df$visitors, egizio_predictions_df$predicted_visitors_boosting)
-rmse <- rmse(egizio_test_df$visitors, egizio_predictions_df$predicted_visitors_boosting)
-mae <- mae(egizio_test_df$visitors, egizio_predictions_df$predicted_visitors_boosting)
-mape <- mape(egizio_test_df$visitors, egizio_predictions_df$predicted_visitors_boosting)
-
-metrics_df <- rbind(metrics_df, list(Model = "Boosting - TSCV",
-                                     R2 = r_squared, R2_adj = adj_r_squared,
-                                     MSE = mse, RMSE = rmse, MAE = mae,
-                                     MAPE = mape, AIC = NA))
-print(metrics_df)
-
-# Plot predictions 
-plot(egizio_test_df$visitors, egizio_predictions_df$predicted_visitors_boosting,
-     ylab="Predictions", xlab="True")
-abline(0,1)
-
-ggplot(egizio_predictions_df, aes(x = date)) +
-  geom_line(aes(y = visitors_true, color = "Visitors"), size = 1) +
-  geom_line(aes(y = predicted_visitors_boosting, color = "Predicted"),
-            linetype = "dashed", size = 1) +
-  labs(title = "Visitors and Predicted Values Over Time",
-       x = "Date",
-       y = "Values") +
-  scale_color_manual(values = c("Visitors" = "red", "Predicted" = "blue"))
-
-# --------------------------------------------------------------------- #
-# Use date instead of month + year
-
-run_cross_validation <- FALSE
-
-if (run_cross_validation) {
-  grid_boosting <- expand.grid(n.trees = c(100, 150, 200, 500),
-                               interaction.depth = c(4, 5, 6, 7, 8), 
-                               shrinkage = c(0.1, 0.075, 0.05),
-                               n.minobsinnode = c(2, 4, 5, 6))
-  
-  train_controls <- trainControl(method = "timeslice",# time-series cross-validation
-                                 initialWindow = 48, # initial training window
-                                 horizon = 12, # forecast evaluation window
-                                 fixedWindow = TRUE, 
-                                 skip = 12,
-                                 allowParallel = TRUE) # allow parallel processing if available
-  
   gbm_grid <- train(visitors ~ . - date + as.numeric(date) - year - month,
                     data = egizio_train_df,
                     method = "gbm",  
@@ -1181,7 +1066,7 @@ if (run_cross_validation) {
                               shrinkage = best_model_boosting$shrinkage,
                               n.minobsinnode = best_model_boosting$n.minobsinnode)
 } else {
-  final_model_boosting <- gbm(visitors ~ . - date,
+  final_model_boosting <- gbm(visitors ~ . - date + as.numeric(date) - year - month,
                               data = egizio_train_df,
                               distribution = "gaussian",
                               n.trees = 200,
@@ -1231,7 +1116,7 @@ ggplot(egizio_predictions_df, aes(x = date)) +
   scale_color_manual(values = c("Visitors" = "red", "Predicted" = "blue"))
 
 # --------------------------------------------------------------------- #
-# XGBoost - no CV
+# Model 12 - XGBoost - no CV
 training.x <- model.matrix(visitors ~ . - date + as.numeric(date) - month - year,
                            data = egizio_train_df)
 testing.x <- model.matrix(visitors ~ . - date + as.numeric(date) - month - year,
@@ -1287,7 +1172,7 @@ ggplot(egizio_predictions_df, aes(x = date)) +
   scale_color_manual(values = c("Visitors" = "red", "Predicted" = "blue"))
 
 # --------------------------------------------------------------------- #
-# XGboost with Cross-validation
+# Model 13 - XGboost with Cross-validation
 
 # The following cross validation has been performed.
 # To avoid running it again, I added it in an IF-ELSE statement.
@@ -1398,8 +1283,7 @@ ggplot(egizio_predictions_df, aes(x = date)) +
   scale_color_manual(values = c("Visitors" = "red", "Predicted" = "blue"))
 
 # --------------------------------------------------------------------- #
-# Model 9 - ARIMA
-
+# Model 14 - Auto ARIMA
 egizio_visitors_ts <- ts(egizio_train_df$visitors, frequency = 12)
 
 auto_arima <- auto.arima(egizio_visitors_ts)
@@ -1425,7 +1309,6 @@ metrics_df <- rbind(metrics_df, list(Model = "Auto ARIMA",
                                      MAPE = mape, AIC = aic))
 print(metrics_df)
 
-
 ggplot(egizio_predictions_df, aes(x = date)) +
   geom_line(aes(y = visitors_true, color = "Visitors"), linewidth = 1) +
   geom_line(aes(y = predicted_visitors_auto_arima, color = "Predicted"),
@@ -1434,7 +1317,6 @@ ggplot(egizio_predictions_df, aes(x = date)) +
        x = "Date",
        y = "Values") +
   scale_color_manual(values = c("Visitors" = "red", "Predicted" = "blue"))
-
 
 plot(egizio_visitors_ts)
 
@@ -1455,9 +1337,12 @@ grid.arrange(p_acf_df, p_pacf_df, nrow = 2)
 # We see that the lag at time 12 and 24 are relevant as always.
 # So we need to model these particular characteristics.
 
-# Next, we try to build our first custom Arima models:
+# Next, we try to build our first custom Arima models.
+
+# --------------------------------------------------------------------- #
+# Model 15 - SARIMA
 arima <- Arima(egizio_visitors_ts, order = c(1,1,2), seasonal = c(1,1,2)) # Best model
-arima # AIC=323.37
+summary(arima) # AIC=323.37
 
 # Arima (0,1,2) (0,1,2) : AIC=327.28
 # Arima (0,1,0) (0,0,2) : AIC=396.58 
@@ -1466,12 +1351,12 @@ arima # AIC=323.37
 # --> with this model it's clear that there's a pattern that
 #     the model is nor so able to understand
 
-# Confronto tra serie temporale originale e valori adattati dal modello ARIMA
+# Comparison between the original time series and values fitted by the ARIMA model.
 ggplot(data = data.frame(egizio_visitors_ts),
        aes(x = time(egizio_visitors_ts),
            y = egizio_visitors_ts)) +
   geom_line(color = "blue") +  
-  geom_line(aes(y = fitted(arima)), color = "red", linetype = "twodash") +  # Linea dei valori adattati dal modello ARIMA
+  geom_line(aes(y = fitted(arima)), color = "red", linetype = "twodash") +
   labs(title = "True vs Fitted values by ARIMA")
 
 
@@ -1567,8 +1452,8 @@ tsdisplay(diff12)
 
 egizio_visitors_ts <- ts(egizio_train_df$visitors, frequency = 12)
 
-sarima_improved <- Arima(egizio_visitors_ts, order = c(1,0,12), seasonal = c(0,1,1)) # Best model according to AIC, with low MSE
-sarima_improved
+sarima_improved <- Arima(egizio_visitors_ts, order = c(1,0,12), seasonal = c(0,1,1), include.drift = TRUE) # Best model according to AIC, with low MSE
+summary(sarima_improved)
 
 train_predictions_improved <- fitted(sarima_improved)
 
@@ -1615,7 +1500,7 @@ ggplot(egizio_predictions_df, aes(x = date)) +
   scale_color_manual(values = c("Visitors" = "red", "Predicted" = "blue"))
 
 # --------------------------------------------------------------------- #
-# Model 10 - Decomposition
+# Model 16 - Decomposition: GBM + TSLM + Boosting
 
 # GBM doesn't work with standardized data!
 egizio_train_unstandardized_df <- egizio_train_df_copy
@@ -1827,15 +1712,11 @@ ggplot(egizio_predictions_df, aes(x = date)) +
        y = "Values") +
   scale_color_manual(values = c("Visitors" = "red", "Predicted" = "blue"))
 
-#++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-#Model 9
-## LOCAL REGRESSION
-
-library(sm)
+# --------------------------------------------------------------------- #
+# Model 17 - Local Regression
 
 # This function creates a nonparametric regression estimate from 
-# data consisting of a single response variable and one or two 
-# covariates.
+# data consisting of a single response variable and one or two covariates.
 
 # x = vector/two-columns matrix of covariates
 #     --> we consider the two best variables looking at the
@@ -1846,35 +1727,31 @@ library(sm)
 
 # y = vector of response
 
-x = regressors
-y = egizio_train_df$visitors
+x <- regressors
+y <- egizio_train_df$visitors
 
 # Model with the Inflation covariate ??
 
 plot(egizio_visitors_train_ts)
 
 sm.regression(x[,1], y, h = 100, add = T, col = 2)
-sm.regression(x[,1], y,   h = 10, add = T, ngrid=200, col=3)
-sm.regression(x[,1], y,   h = 30, ngrid=200, col=4)
-sm.regression(x[,1], y,   h = 50, add = T, ngrid=200, col=5)
-sm.regression(x[,1], y,   h = 5,  add = T, ngrid=200, col=6)
-sm.regression(x[,1], y,   h = 1,  add = T, col=7, ngrid=200)
+sm.regression(x[,1], y, h = 10, add = T, ngrid=200, col=3)
+sm.regression(x[,1], y, h = 30, ngrid=200, col=4)
+sm.regression(x[,1], y, h = 50, add = T, ngrid=200, col=5)
+sm.regression(x[,1], y, h = 5, add = T, ngrid=200, col=6)
+sm.regression(x[,1], y, h = 1, add = T, col=7, ngrid=200)
 
+# We add variability bands
+sm.regression(x[,1], y, h = 30, ngrid=200, display="se")
 
-#We add variability bands
-sm.regression(x[,1], y,   h = 30, ngrid=200, display="se")
+# --------------------------------------------------------------------- #
+# LOESS
 
-
-
-## LOESS
-
-# the x and y arguments provide the x and y coordinates for the 
-# plot. 
-
+# the x and y arguments provide the x and y coordinates for the plot. 
 
 x = 1:204
 y = egizio_train_df$visitors
-egizio_train_df$date<- as.numeric(egizio_train_df$date)
+# egizio_train_df$date<- as.numeric(egizio_train_df$date) # Commented out by Dejan
 
 # We use geom_smooth in order to graphically see the results
 
@@ -1891,41 +1768,40 @@ ggplot( data = egizio_train_df,
 loess1_ecar <- loess.smooth(x,y) # span = 2/3
 
 ggplot( data = egizio_train_df, 
-        aes(x =date, y = egizio_train_df$visitors))+
-  geom_point()+
-  xlab("Date")+
-  ylab("Visitors")+
-  ggtitle("Loess Model for Egizio Visitors")+
+        aes(x = date, y = visitors)) +
+  geom_point() +
+  xlab("Date") +
+  ylab("Visitors") +
+  ggtitle("Loess Model for Egizio Visitors") +
   geom_smooth(method = "loess", span = 0.9, color = "red")
+
 loess2_ecar <- loess.smooth(x,y, span = 0.9) 
 
-
 ggplot( data = egizio_train_df, 
-        aes(x = date, y = egizio_train_df$visitors))+
-  geom_point()+
-  xlab("Date")+
-  ylab("ECarSales")+
-  ggtitle("Loess Model for Egizio Visitors")+
+        aes(x = date, y = visitors)) +
+  geom_point() +
+  xlab("Date") +
+  ylab("ECarSales") +
+  ggtitle("Loess Model for Egizio Visitors") +
   geom_smooth(method = "loess", span = 0.4, color = "green")
 
 loess2_ecar <- loess.smooth(x,y, span = 0.4) 
 
-
 # Complete comparison:
 
 ggplot( data = egizio_train_df, 
-        aes(x = date, y =visitors))+
-  geom_point()+
-  xlab("Date")+
-  ylab("ECarSales")+
-  ggtitle("Loess Model for ECarSales")+
-  geom_smooth(method = "loess", span = 2/3, se = F)+
+        aes(x = date, y = visitors)) +
+  geom_point() +
+  xlab("Date") +
+  ylab("Visitors") +
+  ggtitle("Loess Model for Visitors") +
+  geom_smooth(method = "loess", span = 2/3, se = F) +
   geom_smooth(method = "loess", span = 0.9, 
-              color = "red", se = F)+
+              color = "red", se = F) +
   geom_smooth(method = "loess", span = 0.4, 
-              color = "green", se = F)+
+              color = "green", se = F) +
   geom_smooth(method = "loess", span = 0.25, 
-              color = "yellow", se = F)+
+              color = "yellow", se = F) +
   geom_smooth(method = "loess", span = 0.1, 
               color = "orange", se = F)
 
@@ -1934,18 +1810,13 @@ ggplot( data = egizio_train_df,
 
 # Smallest is the "span" value --> better is the interpolation
 
+# --------------------------------------------------------------------- #
+# CUBIC SPLINES
 
+x <- 1:204
+y <- egizio_train_df$visitors
 
-
-## CUBIC SPLINES
-
-library(splines)
-
-x = 1:204
-y = egizio_train_df$visitors
-
-# We may select the internal-knots by using the degrees of 
-# freedom: 
+# We may select the internal-knots by using the degrees of freedom: 
 
 # (basic functions b-spline for a cubic spline (degree=3))
 
@@ -1955,10 +1826,10 @@ y = egizio_train_df$visitors
 # distribution 
 
 ggplot( data = egizio_train_df, 
-        aes(x = date, y = visitors))+
-  geom_point()+
-  xlab("Date")+
-  ylab("Visitors")+
+        aes(x = date, y = visitors)) +
+  geom_point() +
+  xlab("Date") +
+  ylab("Visitors") +
   ggtitle("Loess Model for Visitors")
 
 
@@ -1966,9 +1837,8 @@ ggplot( data = egizio_train_df,
 
 # Starting with 2 internal-knots
 
-splines3_2 = lm(y ~ bs(x, df = 5, degree = 3)) 
+splines3_2 <- lm(y ~ bs(x, df = 5, degree = 3)) 
 summary(splines3_2) # 0.8663
-
 # 2-5 not significant
 # 1-3-4 significant
 
@@ -1980,10 +1850,8 @@ ggplot( data = egizio_train_df,
   ggtitle("Loess Model for Egizio Visitors")+
   geom_line(aes(y = splines3_2$fitted.values, color = "red"))
 
-
 # Proceeding with 4 internal-knots
-
-splines3_4 = lm(y ~ bs(x, df = 7, degree = 3)) 
+splines3_4 <- lm(y ~ bs(x, df = 7, degree = 3)) 
 summary(splines3_4) # 0.8748
 
 # 1-3-5 not significant
@@ -2000,7 +1868,7 @@ ggplot( data = egizio_train_df,
 
 # Model with no internal-knots
 
-splines3_0 = lm(y ~ bs(x, df = 3, degree = 3)) 
+splines3_0 <- lm(y ~ bs(x, df = 3, degree = 3)) 
 summary(splines3_0) # 0.9063
 # 3-5-6-7 significant
 
@@ -2015,7 +1883,7 @@ ggplot( data =  egizio_train_df,
 
 # Model with 8 internal-knots
 
-splines3_8 = lm(y ~ bs(x, df = 11, degree = 3)) 
+splines3_8 <- lm(y ~ bs(x, df = 11, degree = 3)) 
 summary(splines3_8) # 0.7851
 
 
@@ -2027,15 +1895,16 @@ ggplot( data = egizio_train_df,
   ggtitle("Loess Model for Egizio Visitors")+
   geom_line(aes(y = splines3_8$fitted.values, color = "red"))
 
+# ToDo: Dejan - use this instead of GBM in Model Decomposition
+
 # Best with degree = 3 --> 8 internal knots, df = 11
 
 
 # DEGREE 4
 
-
 # Starting with 2 internal-knots
 
-splines4_2 = lm(y ~ bs(x, df = 6, degree = 4)) 
+splines4_2 <- lm(y ~ bs(x, df = 6, degree = 4)) 
 summary(splines4_2) # 0.8333
 
 # 2-3-4 not significant
@@ -2052,7 +1921,7 @@ ggplot( data = egizio_train_df,
 
 # Proceeding with 4 internal-knots
 
-splines4_4 = lm(y ~ bs(x, df = 8, degree = 4)) 
+splines4_4 <- lm(y ~ bs(x, df = 8, degree = 4)) 
 summary(splines4_4) # 0.7971
 # 1-2-3-4 not significant
 # 5-6-7-8 significant
@@ -2068,7 +1937,7 @@ ggplot( data = egizio_train_df,
 
 # Model with no internal-knots
 
-splines4_0 = lm(y ~ bs(x, df = 4, degree = 4)) 
+splines4_0 <- lm(y ~ bs(x, df = 4, degree = 4)) 
 summary(splines4_0) # 0.8818
 
 # 1-2-3 significant
@@ -2085,7 +1954,7 @@ ggplot( data = egizio_train_df,
 
 # Model with 8 internal-knots
 
-splines4_8 = lm(y ~ bs(x, df = 12, degree = 4)) 
+splines4_8 <- lm(y ~ bs(x, df = 12, degree = 4)) 
 summary(splines4_8) # 0.7926
 
 # 1-2-3-4-5-6-8-10-11 not significant
@@ -2128,8 +1997,7 @@ ggplot( data = egizio_train_df,
 
 # Model 1
 
-sm_spline1 = npreg::ss(x,y, method = "AIC", lambda = 0.000001,
-                       all.knots = T)
+sm_spline1 = ss(x,y, method = "AIC", lambda = 0.000001, all.knots = T)
 
 ggplot( data = egizio_train_df, 
         aes(x = date, y = visitors))+
@@ -2142,7 +2010,7 @@ ggplot( data = egizio_train_df,
 
 # Model with Cross Validation Method for parameter selection
 
-sm_spline_gcv = npreg::ss(x,y, method = "GCV")
+sm_spline_gcv <- ss(x,y, method = "GCV")
 
 ggplot( data = egizio_train_df, 
         aes(x = date, y = visitors))+
@@ -2153,31 +2021,34 @@ ggplot( data = egizio_train_df,
   geom_line(aes(y = sm_spline_gcv$y, color = "red"))
 
 sm_spline_gcv
-#++++++++++++++++++++++++++++++++++++++++++
-#+++++++++++++++HOLT WINTERS+++++++++++++++
-#++++++++++++++++++++++++++++++++++++++++++
 
+# --------------------------------------------------------------------- #
+# Model 18 - Exponential smoothing - Holt Winters
 egizio_visitors_ts <- ts(egizio_train_df$visitors, frequency = 12)
 components_dfts <- decompose(egizio_visitors_ts)
 plot(components_dfts)
+
 HW1 <- HoltWinters(egizio_visitors_ts)  #Smoothing parameters:alpha: 0.6785537, beta : 0.007338514, gamma: 1
 HW2 <- HoltWinters(egizio_visitors_ts, alpha=0.2, beta=0.1, gamma=0.1)
-#Visually evaluate the fits
+
+# Visually evaluate the fits
 plot(egizio_visitors_ts, ylab="egizio visitors")
 lines(HW1$fitted[,1], lty=2, col="blue")
 lines(HW2$fitted[,1], lty=2, col="red")
-#predictions with predict
+
+# Predictions with predict
 HW1.pred <- predict(HW1, 12, prediction.interval = TRUE, level=0.95)
-#Visually evaluate the prediction
+# Visually evaluate the prediction
 plot(egizio_visitors_ts, ylab="visitors")
 lines(HW1$fitted[,1], lty=2, col="blue")
 lines(HW1.pred[,1], col="red")
 lines(HW1.pred[,2], lty=2, col="orange")
 lines(HW1.pred[,3], lty=2, col="orange")
 
-egizio_predictions_df$predicted_HW1 <- predict(HW1, 12, prediction.interval = TRUE, level=0.95)
+egizio_predictions_df$predicted_HW1 <- HW1.pred[,2]
 
 # Calculate metrics
+# R2 and Adj R2 can't be calculated: length(HW1$fitted[,2]) = 192 != 204 (train)
 mse <- mse(egizio_test_df$visitors, egizio_predictions_df$predicted_HW1)
 rmse <- rmse(egizio_test_df$visitors, egizio_predictions_df$predicted_HW1)
 mae <- mae(egizio_test_df$visitors, egizio_predictions_df$predicted_HW1)
@@ -2189,17 +2060,16 @@ metrics_df <- rbind(metrics_df, list(Model = "HW1",
                                      MAPE = mape, AIC = NA))
 print(metrics_df)
 
-#For HW2
-plot(egizio_visitors_ts, ylab="egizio visitors")
+# For HW2
 HW2.pred <- predict(HW2, 12, prediction.interval = TRUE, level=0.95)
-#Visually evaluate the prediction
-plot(egizio_visitors_ts, ylab="visitors")
+# Visually evaluate the prediction
+plot(egizio_visitors_ts, ylab="Egizio visitors")
 lines(HW2$fitted[,1], lty=2, col="blue")
 lines(HW2.pred[,1], col="red")
 lines(HW2.pred[,2], lty=2, col="orange")
 lines(HW2.pred[,3], lty=2, col="orange")
 
-egizio_predictions_df$predicted_HW2 <- predict(HW2, 12, prediction.interval = TRUE, level=0.95)
+egizio_predictions_df$predicted_HW2 <- HW2.pred[,2]
 
 # Calculate metrics
 mse <- mse(egizio_test_df$visitors, egizio_predictions_df$predicted_HW2)
@@ -2213,31 +2083,31 @@ metrics_df <- rbind(metrics_df, list(Model = "HW1",
                                      MAPE = mape, AIC = NA))
 print(metrics_df)
 metrics_df
-######for forecasting
+
+# Forecasting
 
 HW1_for <- forecast(HW1, h=12, level=c(80,95))
-#visualize our predictions:
+# Visualize our predictions:
 plot(HW1_for)
 lines(HW1_for$fitted, lty=2, col="purple")
 
-
 HW2_for <- forecast(HW2, h=12, level=c(80,95))
-#visualize our predictions:
+# Visualize our predictions:
 plot(HW2_for)
 lines(HW2_for$fitted, lty=2, col="green")
 
-#let's check the residuals
+# Let's check the residuals
 acf(HW1_for$residuals, lag.max=20, na.action=na.pass)
 Box.test(HW1_for$residuals, lag=20, type="Ljung-Box")
 hist(HW1_for$residuals)
 
-#let's check the residuals
+# Let's check the residuals
 acf(HW2_for$residuals, lag.max=20, na.action=na.pass)
 Box.test(HW2_for$residuals, lag=20, type="Ljung-Box")
 hist(HW2_for$residuals)
 
-
-############for multiplicative seasonality probably doesn't work
+# --------------------------------------------------------------------- #
+# Multiplicative seasonality - Probably doesn't work!
 HW3 <- HoltWinters(egizio_visitors_ts, seasonal = "multiplicative")
 HW3.pred <- predict(HW3, 12, prediction.interval = TRUE, level=0.95)
 plot(egizio_visitors_ts, ylab="Visitors")
@@ -2245,3 +2115,61 @@ lines(HW3$fitted[,1], lty=2, col="blue")
 lines(HW3.pred[,1], col="red")
 lines(HW3.pred[,2], lty=2, col="orange")
 lines(HW3.pred[,3], lty=2, col="orange")
+
+# --------------------------------------------------------------------- #
+# Covid analysis
+
+egizio_train_no_covid_ds <- egizio_train_df[1:182,]
+egizio_train_no_covid_visitors_ts <- ts(egizio_train_no_covid_ds$visitors, frequency = 12)
+
+# auto_arima_no_covid <- auto.arima(egizio_train_no_covid_visitors_ts)
+# summary(auto_arima_no_covid)
+arima_no_covid <- Arima(egizio_train_no_covid_visitors_ts, order = c(1,0,12), seasonal = c(0,1,1), include.drift=TRUE)
+summary(arima_no_covid)
+# Arima (1,0,12) (0,1,2): AIC=315.3  MSE=0.3677237 -> best predictions (they follow the pattern and are close to the original ones)
+# Arima (1,0,12) (0,1,1
+
+train_predictions <- fitted(arima_no_covid)
+plot.ts(egizio_train_no_covid_visitors_ts,)
+lines(train_predictions,col=2)
+
+# Calculate metrics for ARIMA
+train_r_squared <- RSQUARE(egizio_train_no_covid_visitors_ts, train_predictions)
+train_adj_r_squared <- adjusted_R2(egizio_train_no_covid_visitors_ts, train_predictions, length(egizio_train_no_covid_visitors_ts), length(coef(arima_no_covid)))
+train_mse <- mse(egizio_train_no_covid_visitors_ts, train_predictions)
+train_rmse <- rmse(egizio_train_no_covid_visitors_ts, train_predictions)
+train_mae <- mae(egizio_train_no_covid_visitors_ts, train_predictions)
+train_mape <- mape(egizio_train_no_covid_visitors_ts, train_predictions)
+train_aic <- AIC(arima_no_covid)
+cat(train_r_squared, train_adj_r_squared, train_mse, train_rmse, train_mae, train_mape, train_aic)
+# ARIMA(1,0,0)(0,1,1)[12]  with drift  -> auto.arima
+# 0.8252398 0.8222944 0.1548635 0.393527 0.2696119 2.845475 199.2697
+# ARIMA(1,0,0)(0,1,1)[12]
+# 0.8118321 0.8097297 0.1761314 0.4196802 0.2850211 4.23913 213.4053
+# ARIMA(0,1,0)(0,0,2)[12]
+# 0.6465594 0.6426104 0.3362435 0.5798651 0.4140625 4.931406 333.4424 -> worst so far
+# ARIMA(2,1,0)(0,0,2)[12]
+# 0.6731746 0.6657888 0.2960668 0.5441202 0.4052702 2.27686 313.9609
+# ARIMA(0,0,2)(0,1,2)[12]
+# 0.8064432 0.802069 0.1882227 0.4338464 0.3019183 3.892071 225.611
+# ARIMA(1,0,1)(0,1,1)[12]
+# 0.8115735 0.8083978 0.1751072 0.4184582 0.2817051 4.140427 215.0994
+# ARIMA(1,0,1)(1,1,1)[12]
+# 0.8115048 0.807245 0.1751191 0.4184723 0.2818706 4.096347 217.0835
+# ARIMA(1,0,1)(1,1,1)[12] with drift 
+# 0.8305325 0.8257181 0.15026 0.3876339 0.2651033 2.824176 201.7319
+# ARIMA(1,0,12)(0,1,2)[12] with drift 
+# 0.8446689 0.8296065 0.1376606 0.3710264 0.249028 1.825775 210.5226
+# ARIMA(1,0,12)(0,1,2)[12] 
+# 0.8415546 0.8272373 0.1422016 0.3770962 0.2470302 3.303893 215.6457
+# ARIMA(1,0,12)(0,1,1)[12]
+# 0.8406394 0.8272798 0.1431409 0.3783396 0.2479723 3.35098 213.6938
+# ARIMA(1,0,12)(0,1,1)[12] with drift
+# 0.8411991 0.8268496 0.1403601 0.3746466 0.2512212 3.359727 212.4123
+
+
+# After finding the best model:
+predicted_visitors_auto_arima_no_covid <- forecast(arima_no_covid, h=22)
+plot(predicted_visitors_auto_arima_no_covid)
+
+# ToDo (Dejan): To be finished.
