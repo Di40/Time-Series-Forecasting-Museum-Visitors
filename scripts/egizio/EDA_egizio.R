@@ -9,6 +9,7 @@ library(ggplot2)
 library(lubridate)
 library(reshape2)
 library(forecast)
+library(dplyr)
 
 # Change working directory
 script_path <- rstudioapi::getSourceEditorContext()$path
@@ -25,6 +26,11 @@ if (!file.exists("../../data/egizio_final.rds")) {
   source("preprocessing_egizio.R")
 }
 egizio_df <- readRDS("../../data/egizio_final.rds")
+
+str(egizio_df)
+
+# Exclude the lagged regressors:
+egizio_df <- egizio_df %>% select(-starts_with("lagged_"))
 
 # We don't need month and year for visualization purposes, so we drop them.
 columns_to_exclude <- c("month", "year")
