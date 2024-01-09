@@ -24,6 +24,7 @@ library(MASS)
 library(sm)
 library(splines)
 library(npreg)
+library(patchwork)
 
 # Change working directory
 script_path <- rstudioapi::getSourceEditorContext()$path
@@ -135,23 +136,74 @@ if (perform_standardization) {
   egizio_test_df <- standardize$test_df
   print(head(egizio_train_df))
   print(head(egizio_test_df))
+}
   
   egizio_predictions_df$visitors_true <- egizio_test_df$visitors
   
   # ToDo: Decide whether/how to improve the legend.
   # ToDo: Also, maybe it's better to split it to two subplots: top - visitors, bottom - trends?
-  ggplot() +
-    geom_line(data = egizio_train_df, aes(x = date, y = visitors, color = "Visitors", linetype = "Train"), linewidth = 1.5) +
-    geom_line(data = egizio_test_df, aes(x = date, y = visitors, color = "Visitors", linetype = "Test"), linewidth = 1.5) +
-    geom_line(data = egizio_train_df, aes(x = date, y = trends, color = "Trends", linetype = "Train"), linewidth = 1.5) +
-    geom_line(data = egizio_test_df, aes(x = date, y = trends, color = "Trends", linetype = "Test"), linewidth = 1.5) +
-    labs(title = "Visitors and Trends over time", x = "Date", y = "Values") +
-    scale_color_manual(name = "Variable", values = c("Visitors"="red", "Trends"="blue")) +
-    scale_linetype_manual(name = "Dataset", values = c("Train"="solid", "Test"="dashed")) +
-    geom_vline(xintercept = as.numeric(min(egizio_test_df$date)), linetype = "dotted", color = "black") +
-    theme_minimal()
-}
+  #I have work on this, feel free to modify it
+ # ggplot() +
+##    geom_line(data = egizio_test_df, aes(x = date, y = visitors, color = "Visitors", linetype = "Test"), linewidth = 1.5) +
+#    geom_line(data = egizio_train_df, aes(x = date, y = trends, color = "Trends", linetype = "Train"), linewidth = 1.5) +
+##    geom_line(data = egizio_test_df, aes(x = date, y = trends, color = "Trends", linetype = "Test"), linewidth = 1.5) +
+#    labs(title = "Visitors and Trends over time", x = "Date", y = "Values") +
+#    scale_color_manual(name = "Variable", values = c("Visitors"="red", "Trends"="blue")) +
+#    scale_linetype_manual(name = "Dataset", values = c("Train"="solid", "Test"="dashed")) +
+#    geom_vline(xintercept = as.numeric(min(egizio_test_df$date)), linetype = "dotted", color = "black") +
+#    theme_minimal()
 
+
+
+ggplot() +
+  geom_line(data = egizio_train_df, aes(x = date, y = visitors, color = "Train - Visitors", linetype = "Train"), size = 1) +
+  geom_line(data = egizio_test_df, aes(x = date, y = visitors, color = "Test - Visitors", linetype = "Test"), size = 1) +
+  geom_line(data = egizio_train_df, aes(x = date, y = trends, color = "Train - Trends", linetype = "Train"), size = 1) +
+  geom_line(data = egizio_test_df, aes(x = date, y = trends, color = "Test - Trends", linetype = "Test"), size = 1) +
+  labs(title = "Visitors and Trends over Time", x = "Date", y = "Values") +
+  scale_color_manual(name = "Variable", 
+                     values = c("Train - Visitors" = "red", "Test - Visitors" = "darkred", 
+                                "Train - Trends" = "blue", "Test - Trends" = "darkblue")) +
+  scale_linetype_manual(name = "Dataset", 
+                        values = c("Train" = "solid", "Test" = "dashed")) +
+  geom_vline(xintercept = as.numeric(min(egizio_test_df$date)), linetype = "dotted", color = "black") +
+  theme_minimal() +
+  theme(legend.position = c(0.85, 0.95)) +  
+  guides(linetype = "none")
+
+
+
+#This is the version with one above the other
+plot1 <- ggplot() +
+  geom_line(data = egizio_train_df, aes(x = date, y = visitors, color = "Train - Visitors", linetype = "Train"), size = 1) +
+  geom_line(data = egizio_test_df, aes(x = date, y = visitors, color = "Test - Visitors", linetype = "Test"), size = 1) +
+  labs(title = "Visitors over Time", x = "Date", y = "Values") +
+  scale_color_manual(name = "Variable", 
+                     values = c("Train - Visitors" = "red", "Test - Visitors" = "darkred")) +
+  scale_linetype_manual(name = "Dataset", 
+                        values = c("Train" = "solid", "Test" = "dashed")) +
+  geom_vline(xintercept = as.numeric(min(egizio_test_df$date)), linetype = "dotted", color = "black") +
+  theme_minimal() +
+  theme(legend.position = c(0.8, 0.8)) +
+  guides(linetype = "none")
+
+plot2 <- ggplot() +
+  geom_line(data = egizio_train_df, aes(x = date, y = trends, color = "Train - Trends", linetype = "Train"), size = 1) +
+  geom_line(data = egizio_test_df, aes(x = date, y = trends, color = "Test - Trends", linetype = "Test"), size = 1) +
+  labs(title = "Trends over Time", x = "Date", y = "Values") +
+  scale_color_manual(name = "Variable", 
+                     values = c("Train - Trends" = "blue", "Test - Trends" = "darkblue")) +
+  scale_linetype_manual(name = "Dataset", 
+                        values = c("Train" = "solid", "Test" = "dashed")) +
+  geom_vline(xintercept = as.numeric(min(egizio_test_df$date)), linetype = "dotted", color = "black") +
+  theme_minimal() +
+  theme(legend.position = c(0.8, 0.8)) +
+  guides(linetype = "none")
+plot1 <- plot1 + theme(legend.position = c(0.90, 1.02))
+plot2 <- plot2 + theme(legend.position = c(0.90, 0.99))
+arranged_plots <- plot1 / plot2
+
+arranged_plots
 # ---------------------------------------------------------------------------- #
 # Metrics
 
@@ -575,16 +627,16 @@ ggplot(egizio_predictions_df, aes(x = date)) +
 # Stepwise GAM
 
 # Start with a linear model (df=1)
-g3 <- gam(visitors ~. - date, data=egizio_train_df)
-summary(g3)
-AIC(g3)
+gam1 <- gam(visitors ~. - date, data=egizio_train_df)
+summary(gam1)
+AIC(gam1)   #302.4844
 
 sc <- gam.scope(egizio_train_df[, -which(names(egizio_train_df) %in% c("date", "visitors"))],
                 arg = c("df=2", "df=3", "df=4"))
-g4 <- step.Gam(g3, scope = sc, trace = TRUE)
-summary(g4)
+step_gam <- step.Gam(gam1, scope = sc, trace = TRUE)
+summary(step_gam)
 
-AIC(g4) # 177.3217
+AIC(step_gam) # 177.3217 
 
 # par(mfrow=c(3,5))
 # plot(g4, se=T)
@@ -594,24 +646,51 @@ AIC(g4) # 177.3217
 # plot(g4, se=T, ask=T)
 
 # Prediction
-p.gam <- predict(g4, newdata=egizio_test_df)     
+p.gam1<- predict(gam1, newdata=egizio_test_df)  
+p.gam <- predict(step_gam, newdata=egizio_test_df)     
 cat('Deviance:', sum((p.gam - egizio_test_df$visitors)^2))
-
+cat('Deviance gam1 :', sum((p.gam1 - egizio_test_df$visitors)^2))    #gam 1 has smaller deviance
 colnames(egizio_train_df)
-gam_visitors <- gam(visitors ~ s(date_numeric) + s(year) + s(month)
-                    + s(trends) + s(average_temperature) + s(raining_days)
-                    + s(school_holidays) + s(arrivals) + Covid_closures
-                    + renovation + lagged_renovation + s(lagged_trends)
-                    + s(lagged_average_temperature) + s(lagged_raining_days)
-                    + s(lagged_school_holidays) + s(lagged_arrivals),
-                    data = egizio_train_df)
+#gam_visitors <- gam(visitors ~ s(date_numeric) + s(year) + s(month)
+#                    + s(trends) + s(average_temperature) + s(raining_days)
+#                    + s(school_holidays) + s(arrivals) + Covid_closures
+#                    + renovation + lagged_renovation + s(lagged_trends)
+#                    + s(lagged_average_temperature) + s(lagged_raining_days)
+#                    + s(lagged_school_holidays) + s(lagged_arrivals),
+#                    data = egizio_train_df)
 
-summary(gam_visitors)
-AIC(gam_visitors)
+#summary(gam_visitors)
+#AIC(gam_visitors)
+egizio_predictions_df$predicted_gam <- predict(step_gam, newdata=egizio_test_df)  
 
-# ToDo (Anna): Can we perform stepwise GAM for the code above?
-# ToDo (Anna): Compute predictions and calculate metrics.
+# Calculate metrics
+#r_squared <- summary(step_gam)$r.squared
+#adj_r_squared <- summary(step_gam)$adj.r.squared
+aic <- AIC(step_gam)
+mse <- mse(egizio_test_df$visitors, egizio_predictions_df$predicted_gam)
+rmse <- rmse(egizio_test_df$visitors, egizio_predictions_df$predicted_gam)
+mae <- mae(egizio_test_df$visitors, egizio_predictions_df$predicted_gam)
+mape <- mape(egizio_test_df$visitors, egizio_predictions_df$predicted_gam)
 
+metrics_df <- rbind(metrics_df, list(Model = "Multiple LR Manual Features",
+                                     R2 = NA, R2_adj = NA,
+                                     MSE = mse, RMSE = rmse, MAE = mae,
+                                     MAPE = mape, AIC = aic))
+print(metrics_df)
+
+# Plot predictions 
+plot(egizio_test_df$visitors, egizio_predictions_df$predicted_gam,
+     ylab="Predictions", xlab="True")
+#abline(0,1)
+
+ggplot(egizio_predictions_df, aes(x = date)) +
+  geom_line(aes(y = visitors_true, color = "Visitors"), linewidth = 1) +
+  geom_line(aes(y = p.gam, color = "Predicted"),
+            linetype = "dashed", linewidth = 1) +
+  labs(title = "Visitors and Predicted Values Over Time",
+       x = "Date",
+       y = "Values") +
+  scale_color_manual(values = c("Visitors" = "red", "Predicted" = "blue"))
 # --------------------------------------------------------------------- #
 # Model 7 - Generalized Bass Model (with shock)
 
@@ -1086,22 +1165,38 @@ lines(HW3.pred[,3], lty=2, col="purple")
 # The outputs seem wrong (or delete this part).
 
 # Skip 1 - rennovation (binary variable)
-x <- regressors_train[, c(2,3)] # arrivals and trends
-y <- y_train
+egizio_train_df$date<-as.numeric(egizio_train_df$date) 
+regressors =  as.matrix(egizio_train_df[,-c(4)])
 
+regressors<-as.numeric(regressors[1])
+regressors <- apply(regressors[, -1], 2, as.numeric)
+#x <- regressors_train[, c(2,3)] # arrivals and trends
+x<-regressors
+y <- y_train[,-4]
+x <- regressors[, 1]
+x<- as.numeric(x)
 # Model with the Inflation covariate ??
 plot.ts(egizio_visitors_train_ts)
 
-sm.regression(x[,1], y, h = 100, add = T, col = 2)
-sm.regression(x[,1], y, h = 10, add = T, ngrid=200, col=3)
+sm.regression(x, y, h = 100, add = T, col = 2)
+sm.regression(x, y, h = 10, add = T, ngrid=200, col=3)
 sm.regression(x[,1], y, h = 30, ngrid=200, col=4)
 sm.regression(x[,1], y, h = 50, add = T, ngrid=200, col=5)
 sm.regression(x[,1], y, h = 5, add = T, ngrid=200, col=6)
 sm.regression(x[,1], y, h = 1, add = T, col=7, ngrid=200)
-
+x[,1]
 # We add variability bands
 sm.regression(x[,2], y, h = 30, ngrid=200, display="se")
 
+
+data <- data.frame(cbind(y, x))
+
+# Create a ggplot with smoother curves
+ggplot(data, aes(x = x[, 1], y = y)) +
+  geom_point() +  # Scatter plot of the data points
+  geom_smooth(method = "loess", se = FALSE, color = "red") +  # Loess smoother without confidence interval
+  labs(title = "Regression with Smoother Curves", x = "X-Axis Label", y = "Y-Axis Label") +
+  theme_minimal()
 # --------------------------------------------------------------------- #
 # LOESS
 
@@ -1123,7 +1218,7 @@ ggplot(data = egizio_train_df,
   geom_smooth(method = "loess", span = 2/3)
 
 # We use the loess.smooth method for computing the values.
-loess1_ecar <- loess.smooth(x, y) # span = 2/3
+loess1_vis <- loess.smooth(x, y) # span = 2/3
 
 ggplot(data = egizio_train_df, 
        aes(x = date, y = visitors)) +
@@ -1133,17 +1228,17 @@ ggplot(data = egizio_train_df,
   ggtitle("Loess Model for Egizio Visitors") +
   geom_smooth(method = "loess", span = 0.9, color = "red")
 
-loess2_ecar <- loess.smooth(x,y, span = 0.9) 
+loess2_vis <- loess.smooth(x,y, span = 0.9) 
 
 ggplot(data = egizio_train_df, 
        aes(x = date, y = visitors)) +
   geom_point() +
   xlab("Date") +
-  ylab("ECarSales") +
+  ylab("Visitors") +
   ggtitle("Loess Model for Egizio Visitors") +
   geom_smooth(method = "loess", span = 0.4, color = "green")
 
-loess2_ecar <- loess.smooth(x,y, span = 0.4) 
+loess2_vis <- loess.smooth(x,y, span = 0.4) 
 
 # Complete comparison:
 
