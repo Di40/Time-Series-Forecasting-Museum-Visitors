@@ -156,17 +156,17 @@ if (perform_standardization) {
 
 
 ggplot() +
-  geom_line(data = egizio_train_df, aes(x = date, y = visitors, color = "Train - Visitors", linetype = "Train"), size = 1) +
-  geom_line(data = egizio_test_df, aes(x = date, y = visitors, color = "Test - Visitors", linetype = "Test"), size = 1) +
-  geom_line(data = egizio_train_df, aes(x = date, y = trends, color = "Train - Trends", linetype = "Train"), size = 1) +
-  geom_line(data = egizio_test_df, aes(x = date, y = trends, color = "Test - Trends", linetype = "Test"), size = 1) +
+  geom_line(data = egizio_train_df, aes(x = date, y = visitors, color = "Visitors", linetype = "Train"), size = 1) +
+  geom_line(data = egizio_test_df, aes(x = date, y = visitors, color = "Visitors", linetype = "Test"), size = 1) +
+  geom_line(data = egizio_train_df, aes(x = date, y = trends, color = "Trends", linetype = "Train"), size = 1) +
+  geom_line(data = egizio_test_df, aes(x = date, y = trends, color = "Trends", linetype = "Test"), size = 1) +
   labs(title = "Visitors and Trends over Time", x = "Date", y = "Values") +
-  scale_color_manual(name = "Variable", 
-                     values = c("Train - Visitors" = "red", "Test - Visitors" = "darkred", 
-                                "Train - Trends" = "blue", "Test - Trends" = "darkblue")) +
+  scale_color_manual(name = NULL, 
+                     values = c("Visitors" = "red", 
+                                "Trends" = "blue")) +
   scale_linetype_manual(name = "Dataset", 
-                        values = c("Train" = "solid", "Test" = "dashed")) +
-  geom_vline(xintercept = as.numeric(min(egizio_test_df$date)), linetype = "dotted", color = "black") +
+                        values = c("Train" = "solid", "Test" = "solid")) +
+  geom_vline(xintercept = as.numeric(min(egizio_test_df$date)), linetype = "dashed", color = "black", size = 1.5) +  # Increase line thickness
   theme_minimal() +
   theme(legend.position = c(0.85, 0.95)) +  
   guides(linetype = "none")
@@ -184,7 +184,7 @@ plot1 <- ggplot() +
                         values = c("Train" = "solid", "Test" = "dashed")) +
   geom_vline(xintercept = as.numeric(min(egizio_test_df$date)), linetype = "dotted", color = "black") +
   theme_minimal() +
-  theme(legend.position = c(0.8, 0.8)) +
+  theme(legend.position = c(0.7, 0.6)) +
   guides(linetype = "none")
 
 plot2 <- ggplot() +
@@ -1064,12 +1064,12 @@ components_dfts <- decompose(egizio_visitors_train_ts)
 plot(components_dfts)
 
 HW1 <- HoltWinters(egizio_visitors_train_ts) # Smoothing parameters:alpha: 0.6785537, beta : 0.007338514, gamma: 1
-HW2 <- HoltWinters(egizio_visitors_train_ts, alpha=0.2, beta=0.1, gamma=0.1)
+Expo_Smooth_HW <- HoltWinters(egizio_visitors_train_ts, alpha=0.2, beta=0.15, gamma=0.15)
 
 # Visually evaluate the fits
 plot(egizio_visitors_train_ts, ylab="Egizio visitors")
 lines(HW1$fitted[,1], lty=2, col="blue")
-lines(HW2$fitted[,1], lty=2, col="red")
+lines(Expo_Smooth_HW $fitted[,1], lty=2, col="red")
 
 # Forecasting
 HW1_for <- forecast(HW1, h=12, level=c(80,95))
@@ -1094,11 +1094,11 @@ rmse <- rmse(egizio_test_df$visitors, egizio_predictions_df$predicted_HW1)
 mae <- mae(egizio_test_df$visitors, egizio_predictions_df$predicted_HW1)
 mape <- mape(egizio_test_df$visitors, egizio_predictions_df$predicted_HW1)
 sse1<- sse(egizio_test_df$visitors, egizio_predictions_df$predicted_HW1)
-metrics_df <- rbind(metrics_df, list(Model = "Exp. smoothing HW-2",
-                                     R2 = NA, R2_adj = NA,
-                                     MSE = mse, RMSE = rmse, MAE = mae,
-                                     MAPE = mape, AIC = NA))
-print(metrics_df)
+#metrics_df <- rbind(metrics_df, list(Model = "Exp. smoothing HW-1",
+#                                   R2 = NA, R2_adj = NA,
+#                                     MSE = mse, RMSE = rmse, MAE = mae,
+#                                     MAPE = mape, AIC = NA))
+#print(metrics_df)
 
 # Let's check the residuals
 acf(HW1_for$residuals, lag.max=20, na.action=na.pass)
@@ -1106,37 +1106,37 @@ Box.test(HW1_for$residuals, lag=20, type="Ljung-Box")
 hist(HW1_for$residuals)
 
 # For HW2
-HW2_for <- forecast(HW2, h=12, level=c(80,95))
+HW_for <- forecast(Expo_Smooth_HW, h=12, level=c(80,95))
 # Visualize our predictions:
-plot(HW2_for)
-lines(HW2_for$fitted, lty=2, col="green")
+plot(HW_for)
+lines(HW_for$fitted, lty=2, col="green")
 
-HW2.pred <- predict(HW2, 12, prediction.interval = TRUE, level=0.95)
+HW.pred <- predict(Expo_Smooth_HW, 12, prediction.interval = TRUE, level=0.95)
 # Visually evaluate the prediction
 plot(egizio_visitors_train_ts, ylab="Egizio visitors")
-lines(HW2$fitted[,1], lty=2, col="blue")
-lines(HW2.pred[,1], col="red") # This looks good
-lines(HW2.pred[,2], lty=2, col="orange")
-lines(HW2.pred[,3], lty=2, col="purple")
+lines(Expo_Smooth_HW$fitted[,1], lty=2, col="blue")
+lines(HW.pred[,1], col="red") # This looks good
+lines(HW.pred[,2], lty=2, col="orange")
+lines(HW.pred[,3], lty=2, col="purple")
 
-egizio_predictions_df$predicted_HW2 <- HW2.pred[,1]
+egizio_predictions_df$predicted_ESHW <- HW.pred[,1]
 
 # Calculate metrics
-mse <- mse(egizio_test_df$visitors, egizio_predictions_df$predicted_HW2)
-rmse <- rmse(egizio_test_df$visitors, egizio_predictions_df$predicted_HW2)
-mae <- mae(egizio_test_df$visitors, egizio_predictions_df$predicted_HW2)
-mape <- mape(egizio_test_df$visitors, egizio_predictions_df$predicted_HW2)
-sse2 <- sse(egizio_test_df$visitors, egizio_predictions_df$predicted_HW2)
-metrics_df <- rbind(metrics_df, list(Model = "Exp. smoothing HW-2",
+mse <- mse(egizio_test_df$visitors, egizio_predictions_df$predicted_ESHW)
+rmse <- rmse(egizio_test_df$visitors, egizio_predictions_df$predicted_ESHW)
+mae <- mae(egizio_test_df$visitors, egizio_predictions_df$predicted_ESHW)
+mape <- mape(egizio_test_df$visitors, egizio_predictions_df$predicted_ESHW)
+sse2 <- sse(egizio_test_df$visitors, egizio_predictions_df$predicted_ESHW )
+metrics_df <- rbind(metrics_df, list(Model = "Exp. smoothing Holt Winters",
                                      R2 = NA, R2_adj = NA,
                                      MSE = mse, RMSE = rmse, MAE = mae,
                                      MAPE = mape, AIC = NA))
 print(metrics_df)
 
 # Let's check the residuals
-acf(HW2_for$residuals, lag.max=20, na.action=na.pass)
-Box.test(HW2_for$residuals, lag=20, type="Ljung-Box")
-hist(HW2_for$residuals)
+acf(HW_for$residuals, lag.max=20, na.action=na.pass)
+Box.test(HW_for$residuals, lag=20, type="Ljung-Box")
+hist(HW_for$residuals)
 
 
 # Multiplicative seasonality - Probably doesn't work!
@@ -1151,58 +1151,13 @@ lines(HW3.pred[,3], lty=2, col="purple")
 # --------------------------------------------------------------------- #
 # Model 12 - Local Regression
 
-# This function creates a nonparametric regression estimate from 
-# data consisting of a single response variable and one or two covariates.
-
-# x = vector/two-columns matrix of covariates
-#     --> we consider the two best variables looking at the
-#         previous results of the arima models for the residuals.
-#         (they are already contained in the "regressors" matrix)
-
-# y = vector of response
-
-# ToDo (Anna): Fix the following lines with sm.regression
-# The outputs seem wrong (or delete this part).
-
-# Skip 1 - rennovation (binary variable)
-egizio_train_df$date<-as.numeric(egizio_train_df$date) 
-regressors =  as.matrix(egizio_train_df[,-c(4)])
-
-regressors<-as.numeric(regressors[1])
-regressors <- apply(regressors[, -1], 2, as.numeric)
-#x <- regressors_train[, c(2,3)] # arrivals and trends
-x<-regressors
-y <- y_train[,-4]
-x <- regressors[, 1]
-x<- as.numeric(x)
-# Model with the Inflation covariate ??
-plot.ts(egizio_visitors_train_ts)
-
-sm.regression(x, y, h = 100, add = T, col = 2)
-sm.regression(x, y, h = 10, add = T, ngrid=200, col=3)
-sm.regression(x[,1], y, h = 30, ngrid=200, col=4)
-sm.regression(x[,1], y, h = 50, add = T, ngrid=200, col=5)
-sm.regression(x[,1], y, h = 5, add = T, ngrid=200, col=6)
-sm.regression(x[,1], y, h = 1, add = T, col=7, ngrid=200)
-x[,1]
-# We add variability bands
-sm.regression(x[,2], y, h = 30, ngrid=200, display="se")
-
-
-data <- data.frame(cbind(y, x))
-
-# Create a ggplot with smoother curves
-ggplot(data, aes(x = x[, 1], y = y)) +
-  geom_point() +  # Scatter plot of the data points
-  geom_smooth(method = "loess", se = FALSE, color = "red") +  # Loess smoother without confidence interval
-  labs(title = "Regression with Smoother Curves", x = "X-Axis Label", y = "Y-Axis Label") +
-  theme_minimal()
 # --------------------------------------------------------------------- #
 # LOESS
 
 # the x and y arguments provide the x and y coordinates for the plot. 
 
 x = 1:204
+x=egizio_train_df$date
 y = egizio_train_df$visitors
 # egizio_train_df$date<- as.numeric(egizio_train_df$date) # Commented out by Dejan
 # If needed, there is a variable date_numeric.
@@ -1253,8 +1208,9 @@ ggplot(data = egizio_train_df, aes(x = date, y = visitors)) +
 
 # The orange one is the nearest to our model, but the best
 # compromise is given by the yellow one.
-
 # Smallest is the "span" value --> better is the interpolation
+#loess_pred_1 <- predict(loess1_vis, newdata = egizio_test_df$date)
+#loess_pred_2 <- predict(loess2_vis, newdata = data.frame(x = egizio_test_df$date_numeric))
 
 # --------------------------------------------------------------------- #
 # CUBIC SPLINES
@@ -1315,6 +1271,8 @@ ggplot(data = egizio_train_df, aes(x = date, y = visitors)) +
   ggtitle("Loess Model for Egizio Visitors") +
   geom_line(aes(y = splines3_8$fitted.values, color = "red"))
 
+
+#egizio_test_df$predicted_visitors <- predict(splines3_8, newdata =egizio_test_df$date)
 # Best with degree = 3 --> 8 internal knots, df = 11
 
 # --------------------------------------------------------------------- #
