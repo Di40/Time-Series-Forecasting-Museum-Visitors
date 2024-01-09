@@ -47,8 +47,39 @@ str(egizio_df)
 tsdisplay(egizio_df$visitors)
 
 # ToDo: Check whether better visualization techniques can be used.
-# ToDo: Plot the visitors of each year on the same graph, with different colors.
+####Plot the visitors of each year on the same graph, with different colors.
 
+# Extract month and year
+visitors_data<- egizio_df %>%
+  mutate(Year = year(date), Month = month(date, label = TRUE))
+
+
+# Ensure 'Month' is a factor
+visitors_data$Month <- factor(visitors_data$Month, levels = month.abb)
+
+# Prepare data for labels (first and last data points for each year)
+labels_start <- visitors_data %>%
+  group_by(Year) %>%
+  summarize(Month = min(Month), visitors = first(visitors))
+
+labels_end <- visitors_data %>%
+  group_by(Year) %>%
+  summarize(Month = max(Month), visitors = last(visitors))
+# Plot visitors per month for each year
+
+png("../../plots/egizio/visitors_for_months.png", width=1500, height=1000)
+
+ggplot(visitors_data, aes(x = Month, y = visitors, color = factor(Year))) +
+  geom_line(aes(group = Year), size = 1.2) +
+  geom_text(data = labels_start, aes(label = Year), vjust = -0.5,hjust =1.5, size = 4, show.legend = FALSE) +
+  geom_text(data = labels_end, aes(label = Year), vjust = 1.5,hjust =-0.5, size = 4, show.legend = FALSE) +
+  labs(title = "Visitors per Month", x = "Month", y = "Number of Visitors", color = "Year") +
+  scale_color_discrete(name = "Year") +
+  theme_minimal() +
+  theme(legend.position = "top") +
+  guides(color = guide_legend(nrow = 1)) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+dev.off()
 # ---------------------------------------------------------------------------- #
 # Smart plotting
 
@@ -142,4 +173,19 @@ png("../../plots/egizio/yearly_boxplots.png", width=1500, height=1000)
 create_boxplots(egizio_df, "year", "Egizio - Yearly Boxplots for Visitors", "Year", "Visitors")
 dev.off()
 # ---------------------------------------------------------------------------- #
+##Correlation matrix 
+# Select numerical variables only
+numerical_vars <- sapply(egizio_df, is.numeric)
+numerical_df <- egizio_df[, numerical_vars]
 
+# Compute correlation matrix
+correlation_matrix <- cor(numerical_df)
+
+png("../../plots/egizio/correlation_matrix.png", width=1500, height=1000)
+col <- colorRampPalette(c("#BB4444", "#EE9988", "#FFFFFF", "#77AADD", "#4477AA"))
+library("corrplot")
+library("RColorBrewer")
+corrplot(correlation_matrix,method = "color", type="upper", order="hclust",col=col(200),
+         addCoef.col = "black", tl.col = "black", outline=FALSE, number.cex =2)
+
+dev.off()
