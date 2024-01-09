@@ -6,6 +6,7 @@
 library(zoo)
 library(lubridate)
 library(ggplot2)
+library(stats)
 
 rm(list=ls())
 
@@ -160,6 +161,137 @@ str(cinema_df)
 print("Count of NAs in each column:")
 print(colSums(is.na(cinema_df)))
 
+# ---------------------------------------------------------------------------- #
+# Lagged regressors
+
+# We first check the correlation at different lags between our response variable
+# and all the other variables. The lag k value returned by ccf(x, y) estimates
+# the correlation between x[t+k] and y[t].
+
+# Let's extend cinema_df with the lagged variables, i.e., we put inside 
+# all the features that show correlation of type:
+# visitors[t] ~ feature[t-k]
+# We will get some NAs, but we will replace them with the current value.
+
+str(cinema_df)
+
+attach(cinema_df)
+
+LAG_MAX <- 12
+
+# Google Trends
+ccf_trends <- ccf(visitors, trends, lag.max = LAG_MAX, plot = T)
+# The lag 0 that has the maximum positive correlation, which is obvious.
+abs_acf_values_trends <- abs(ccf_trends$acf)[1:12]
+top_lags_trends <- order(abs_acf_values_trends, decreasing = TRUE)[1:3]
+top_lags_trends <- top_lags_trends - LAG_MAX - 1
+print(top_lags_trends)
+# -3 -2 -8
+# We have maximum correlation at:
+# visitors[t] ~ google_trends[t-3]
+
+# Create lagged trends
+lag_trends <- abs(top_lags_trends[1])
+print(lag_trends)
+trends_lagged <- cinema_df$trends # copy
+trends_lagged[(lag_trends+1):nrow(cinema_df)] <- cinema_df$trends[1:(nrow(cinema_df)-lag_trends)] # replace with lagged values
+cinema_df$lagged_trends <- trends_lagged
+
+
+# Average_temperature
+ccf_avg_temp <- ccf(visitors, average_temperature, lag.max = LAG_MAX, plot = T)
+abs_acf_values_avg_temp <- abs(ccf_avg_temp$acf)[1:12]
+top_lags_avg_temp <- order(abs_acf_values_avg_temp, decreasing = TRUE)[1:3]
+top_lags_avg_temp <- top_lags_avg_temp - LAG_MAX - 1
+print(top_lags_avg_temp)
+# -3 -4 -9
+# We have maximum correlation at:
+# visitors[t] ~ average_temperature[t-3]
+
+# Create lagged average_temperature
+lag_average_temperature <- abs(top_lags_avg_temp[1])
+print(lag_average_temperature)
+average_temperature_lagged <- cinema_df$average_temperature # copy
+average_temperature_lagged[(lag_average_temperature+1):nrow(cinema_df)] <- cinema_df$average_temperature[1:(nrow(cinema_df)-lag_average_temperature)] # replace with lagged values
+cinema_df$lagged_average_temperature <- average_temperature_lagged
+
+
+# Raining_days
+ccf_rain_days <- ccf(visitors, raining_days, lag.max = LAG_MAX, plot = T)
+abs_acf_values_rain_days <- abs(ccf_rain_days$acf)[1:12]
+top_lags_rain_days <- order(abs_acf_values_rain_days, decreasing = TRUE)[1:3]
+top_lags_rain_days <- top_lags_rain_days - LAG_MAX - 1
+print(top_lags_rain_days)
+# -1  -9 -12
+# We have maximum correlation at:
+# visitors[t] ~ raining_days[t-1]
+
+# Create lagged raining_days
+lag_raining_days <- abs(top_lags_rain_days[1])
+print(lag_raining_days)
+raining_days_lagged <- cinema_df$raining_days # copy
+raining_days_lagged[(lag_raining_days+1):nrow(cinema_df)] <- cinema_df$raining_days[1:(nrow(cinema_df)-lag_raining_days)] # replace with lagged values
+cinema_df$lagged_raining_days <- raining_days_lagged
+
+
+# School_holidays
+ccf_school_holidays <- ccf(visitors, school_holidays, lag.max = LAG_MAX, plot = T)
+abs_acf_values_school_holidays <- abs(ccf_school_holidays$acf)[1:12]
+top_lags_school_holidays <- order(abs_acf_values_school_holidays, decreasing = TRUE)[1:3]
+top_lags_school_holidays <- top_lags_school_holidays - LAG_MAX - 1
+print(top_lags_school_holidays)
+# -3  -4 -6
+# We have maximum correlation at:
+# visitors[t] ~ school_holidays[t-3]
+
+# Create lagged school_holidays
+lag_school_holidays <- abs(top_lags_school_holidays[1])
+print(lag_school_holidays)
+school_holidays_lagged <- cinema_df$school_holidays # copy
+school_holidays_lagged[(lag_school_holidays+1):nrow(cinema_df)] <- cinema_df$school_holidays[1:(nrow(cinema_df)-lag_school_holidays)] # replace with lagged values
+cinema_df$lagged_school_holidays <- school_holidays_lagged
+
+
+# Arrivals
+ccf_arrivals <- ccf(visitors, arrivals, lag.max = LAG_MAX, plot = T)
+abs_acf_values_arrivals <- abs(ccf_arrivals$acf)[1:12]
+top_lags_arrivals <- order(abs_acf_values_arrivals, decreasing = TRUE)[1:3]
+top_lags_arrivals <- top_lags_arrivals - LAG_MAX - 1
+print(top_lags_arrivals)
+# -6 -1 -5
+# We have maximum correlation at:
+# visitors[t] ~ arrivals[t-6]
+
+# Create lagged arrivals
+lag_arrivals <- abs(top_lags_arrivals[1])
+print(lag_arrivals)
+arrivals_lagged <- cinema_df$arrivals # copy
+arrivals_lagged[(lag_arrivals+1):nrow(cinema_df)] <- cinema_df$arrivals[1:(nrow(cinema_df)-lag_arrivals)] # replace with lagged values
+cinema_df$lagged_arrivals <- arrivals_lagged
+
+
+# Covid (this is a binary variable )
+ccf_covid <- ccf(visitors, Covid_closures, lag.max = LAG_MAX, plot = T)
+# Here, there are significant lags (for Egizio there aren't).
+abs_acf_values_covid <- abs(ccf_covid$acf)[1:12]
+top_lags_covid <- order(abs_acf_values_covid, decreasing = TRUE)[1:3]
+top_lags_covid <- top_lags_covid - LAG_MAX - 1
+print(top_lags_covid)
+# -1  -9 -10
+# We have maximum correlation at:
+# visitors[t] ~ Covid_closures[t-1]
+
+# Create lagged covid_closures
+lag_covid <- abs(top_lags_covid[1])
+print(lag_covid)
+covid_lagged <- cinema_df$Covid_closures # copy
+covid_lagged[(lag_covid+1):nrow(cinema_df)] <- cinema_df$Covid_closures[1:(nrow(cinema_df)-lag_covid)] # replace with lagged values
+cinema_df$lagged_covid_closures <- covid_lagged
+
+detach(cinema_df)
+
+# ---------------------------------------------------------------------------- #
+# Save the final dataset
 # write.csv(cinema_df, "../../data/cinema_final.csv", row.names = FALSE)
 # csv doesn't store information about the changed variable types.
 # So, we use RDS (R Data Serialization) file instead.

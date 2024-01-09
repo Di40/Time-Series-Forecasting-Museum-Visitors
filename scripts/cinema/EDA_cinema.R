@@ -9,6 +9,7 @@ library(ggplot2)
 library(lubridate)
 library(reshape2)
 library(forecast)
+library(dplyr)
 
 # Change working directory
 script_path <- rstudioapi::getSourceEditorContext()$path
@@ -30,6 +31,9 @@ columns_to_exclude <- c("month", "year")
 cinema_df <- cinema_df[, !names(cinema_df) %in% columns_to_exclude]
 
 str(cinema_df)
+
+# Exclude the lagged regressors:
+cinema_df <- cinema_df %>% select(-starts_with("lagged_"))
 
 # Convert back to integer just for visualization purposes.
 cinema_df$Covid_closures <- as.integer(cinema_df$Covid_closures)
