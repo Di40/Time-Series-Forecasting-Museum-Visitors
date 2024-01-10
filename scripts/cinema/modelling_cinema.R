@@ -1645,6 +1645,11 @@ ggplot(cinema_predictions_df, aes(x = date)) +
 # --------------------------------------------------------------------- #
 #                    Best model and error analysis
 # --------------------------------------------------------------------- #
+
+rounded_metrics <- round(metrics_df[, -1], 3)
+rounded_metrics_df <- cbind(metrics_df[, 1, drop = FALSE], rounded_metrics)
+print(rounded_metrics_df)
+
 # Sort based on RMSE, AIC
 sorted_metrics_df <- metrics_df[order(metrics_df$RMSE, metrics_df$MAPE),]
 print(sorted_metrics_df)
@@ -1655,7 +1660,7 @@ print(head(sorted_metrics_df, 5))
 
 # Error analysis: # ToDo: Replace predicted_visitors_sarima with the best model column.
 best_model <- "SARIMA - Improved"
-sorted_cinema_predictions_df <- cinema_predictions_df[,c("visitors_true", "predicted_visitors_sarima")]
+sorted_cinema_predictions_df <- cinema_predictions_df[, c("visitors_true", "predicted_visitors_sarima")]
 
 # Unstandardize
 sorted_cinema_predictions_df$visitors_true <- (sorted_cinema_predictions_df$visitors_true * sd(cinema_train_unstandardized_df$visitors)) + mean(cinema_train_unstandardized_df$visitors)
@@ -1667,6 +1672,7 @@ sorted_cinema_predictions_df$error_percentage <- round(sorted_cinema_predictions
 sorted_cinema_predictions_df <- sorted_cinema_predictions_df[order(sorted_cinema_predictions_df$error_percentage), ]
 
 colnames(sorted_cinema_predictions_df) <- c("Visitors", "Predicted", "Error", "Error (%)")
+sorted_cinema_predictions_df$Predicted <- round(sorted_cinema_predictions_df$Predicted, digits=0)
 # Total Error (%) for SARIMA: 155.15
 # Total Error (%) for Holt-Winters: 154.63
 # Worst predictions for Holt-Winters: 19.81, 25.63, 33.10
@@ -1918,3 +1924,8 @@ ggplot(cinema_predictions_df, aes(x = date)) +
                                 "No interpolation" = "green",
                                 "COVID Interpolated Mean" = "blue",
                                 "COVID Interpolated Forecast" = "purple"))
+
+# Round and print metrics for COVID
+rounded_covid_metrics <- round(covid_metrics_df[, -1], 3)
+rounded_covid_metrics_df <- cbind(covid_metrics_df[, 1, drop = FALSE], rounded_covid_metrics)
+print(rounded_covid_metrics_df)
