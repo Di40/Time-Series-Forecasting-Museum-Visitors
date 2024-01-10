@@ -1226,94 +1226,9 @@ sm_spline_gcv
 # --------------------------------------------------------------------- #
 # Model 12 - Boosting
 
-# Let's first explore the parameters of boosting.
-
-# Modify graphical parameters
 mai.old <- par()$mai
 mai.new <- mai.old # new vector
 mai.new[2] <- 2.5 # new space on the left
-
-# This can be used visitors ~ .- visitors - date + as.numeric(date)
-boost_visitors <- gbm(visitors ~ . - date - date_numeric, data=cinema_train_df, 
-                      distribution="gaussian", n.trees=5000, interaction.depth=1)
-
-par(mai=mai.new)
-summary(boost_visitors, las=1, cBar=20)
-par(mai=mai.old)
-
-yhat_boost <- predict(boost_visitors, newdata=cinema_test_df, n.trees=1:5000)
-err <- apply(yhat_boost, 2, function(pred) mean((cinema_test_df$visitors - pred)^2))
-
-# Error comparison (train and test)
-plot(boost_visitors$train.error, type = "l", ylim = c(0, max(err)),
-     ylab = "Train/Test Error", xlab = "n.trees")
-lines(err, type = "l", col = 2)
-best <- which.min(err)  # Minimum error in the test set
-abline(v = best, lty = 2, col = 4)
-min_error <- min(err)
-title(main = sprintf("Min Error: %.4f", min_error))
-
-# 2 Boosting - Deeper trees
-boost_visitors <- gbm(visitors ~ . - date - date_numeric, data=cinema_train_df,
-                      distribution="gaussian", n.trees=5000,
-                      interaction.depth=4) # (with more than one variable)
-
-par(mai=mai.new)
-summary(boost_visitors, las=1, cBar=20)
-par(mai=mai.old)
-
-yhat_boost <- predict(boost_visitors, newdata=cinema_test_df, n.trees=1:5000)
-err <- apply(yhat_boost, 2, function(pred) mean((cinema_test_df$visitors - pred)^2))
-
-# Error comparison (train and test)
-plot(boost_visitors$train.error, type = "l", ylim = c(0, max(err)),
-     ylab = "Train/Test Error", xlab = "n.trees")
-lines(err, type = "l", col = 2)
-best <- which.min(err)  # Minimum error in the test set
-abline(v = best, lty = 2, col = 4)
-min_error <- min(err)
-title(main = sprintf("Min Error: %.4f", min_error))
-
-# 3 Boosting - Smaller learning rate 
-boost_visitors <- gbm(visitors ~ . - date - date_numeric, data=cinema_train_df,
-                      distribution="gaussian", n.trees=5000, interaction.depth=1,
-                      shrinkage=0.01) # learning rate
-
-par(mai=mai.new)
-summary(boost_visitors, las=1, cBar=20)
-par(mai=mai.old)
-
-yhat_boost <- predict(boost_visitors, newdata=cinema_test_df, n.trees=1:5000)
-err <- apply(yhat_boost, 2, function(pred) mean((cinema_test_df$visitors - pred)^2))
-
-# Error comparison (train and test)
-plot(boost_visitors$train.error, type = "l", ylim = c(0, max(err)),
-     ylab = "Train/Test Error", xlab = "n.trees")
-lines(err, type = "l", col = 2)
-best <- which.min(err)  # Minimum error in the test set
-abline(v = best, lty = 2, col = 4)
-min_error <- min(err)
-title(main = sprintf("Min Error: %.4f", min_error))
-
-# 4 Boosting - combination of previous models
-boost_visitors <- gbm(visitors ~ . - date - date_numeric, data=cinema_train_df,
-                      distribution="gaussian", n.trees=5000,
-                      interaction.depth=4, shrinkage=0.01)
-par(mai=mai.new)
-summary(boost_visitors, las=1, cBar=20)
-par(mai=mai.old)
-
-yhat_boost <- predict(boost_visitors, newdata=cinema_test_df, n.trees=1:5000)
-err <- apply(yhat_boost, 2, function(pred) mean((cinema_test_df$visitors - pred)^2))
-
-# Error comparison (train and test)
-plot(boost_visitors$train.error, type = "l", ylim = c(0, max(err)),
-     ylab = "Train/Test Error", xlab = "n.trees")
-lines(err, type = "l", col = 2)
-best <- which.min(err)  # Minimum error in the test set
-abline(v = best, lty = 2, col = 4)
-min_error <- min(err)
-title(main = sprintf("Min Error: %.4f", min_error))
 
 # Time-series cross-validation
 
@@ -1346,9 +1261,9 @@ cinema_test_no_lagged_df <- cinema_test_no_lagged_df[, !startsWith(names(cinema_
 
 if (run_cross_validation) {
   grid_boosting <- expand.grid(n.trees = c(50, 100, 500, 1000, 5000),
-                               interaction.depth = c(1,4,8), 
+                               interaction.depth = c(1,4,7), 
                                shrinkage = c(0.1, 0.05, 0.01, 0.001),
-                               n.minobsinnode = c(2, 5, 10))
+                               n.minobsinnode = c(2, 4, 10))
   
   train_controls <- trainControl(method = "timeslice",# time-series cross-validation
                                  initialWindow = 48, # initial training window
@@ -1381,10 +1296,10 @@ if (run_cross_validation) {
   final_model_boosting <- gbm(visitors ~ .,
                               data = cinema_train_no_lagged_df,
                               distribution = "gaussian",
-                              n.trees = 200,
-                              interaction.depth = 7,
-                              shrinkage = 0.05,
-                              n.minobsinnode = 4)
+                              n.trees = 100,
+                              interaction.depth = 5,
+                              shrinkage = 0.001,
+                              n.minobsinnode = 2)
 }
 
 par(mai=mai.new)
@@ -1463,7 +1378,7 @@ if (run_cross_validation) {
   
   # Initial grid
   xgboost_grid <- expand.grid(nrounds = c(100, 200, 300),
-                              max_depth = c(5, 7, 10),
+                              max_depth = c(5, 6, 7),
                               eta = c(0.01, 0.025, 0.05, 0.075, 0.1),
                               gamma = c(0, 0.1, 0.2),
                               colsample_bytree = c(0.8, 1),
@@ -1502,11 +1417,10 @@ if (run_cross_validation) {
 } else {
   final_model_xgb <- xgboost(data=data.matrix(training.x[,-1]), # ignore intercept
                              label=as.numeric(as.character(cinema_train_df$visitors)),
-                             eta=0.025, # default=0.3 - takes values in (0-1]
+                             eta=0.001, # default=0.3 - takes values in (0-1]
                              max_depth=6, # default=6 - takes values in (0,Inf), larger value => more complex => overfitting
                              nrounds=500, # default=100 - controls number of iterations (number of trees)
                              early_stopping_rounds=50,
-                             print_every_n = 10,
                              objective="reg:squarederror", # for linear regression
                              verbose=FALSE) 
 }
@@ -1808,26 +1722,13 @@ cinema_train_no_covid_ds <- cinema_train_df[1:182,]
 cinema_train_no_covid_visitors_ts <- ts(cinema_train_no_covid_ds$visitors, frequency = 12)
 # Different models were tried (shown below).
 # The best model was the following:
-sarima_no_covid <- Arima(cinema_train_no_covid_visitors_ts, order = c(1,0,12),
-                         seasonal = c(0,1,2), include.drift=TRUE)
+sarima_no_covid <- auto.arima(cinema_train_no_covid_visitors_ts)
 summary(sarima_no_covid) # AIC=210.52, RMSE=0.3710264
 train_predictions_sarima_no_covid <- fitted(sarima_no_covid)
-
-# The following model seems to work better, but it's wrong.
-# If we include the regressors, they also contain COVID data, so the end of
-# our series will be underestimated, i.e., it will look similar to COVID.
-sarimax_no_covid <- Arima(cinema_train_no_covid_visitors_ts, order = c(1,0,12),
-                          seasonal = c(0,1,2), include.drift=TRUE,
-                          xreg=regressors_train[1:182,])
-summary(sarimax_no_covid) # AIC=125.18, RMSE=0.2856033
-train_predictions_sarimax_no_covid <- fitted(sarimax_no_covid)
 
 # Visualize the predictions for the COVID months:
 plot.ts(cinema_train_no_covid_visitors_ts)
 lines(train_predictions_sarima_no_covid,col=2)
-lines(train_predictions_sarimax_no_covid, col=3) # this one is much better -> but it's wrong!
-
-# We proceed with model: sarima_no_covid.
 
 # Calculate metrics
 train_r_squared <- RSQUARE(cinema_train_no_covid_visitors_ts, train_predictions_sarima_no_covid)
@@ -1839,18 +1740,8 @@ train_mape <- mape(cinema_train_no_covid_visitors_ts, train_predictions_sarima_n
 train_aic <- AIC(sarima_no_covid)
 cat(train_r_squared, train_adj_r_squared, train_mse, train_rmse, train_mae, train_mape, train_aic)
 # The following models were tried:
-# ARIMA(1,0,0)(0,1,1)[12]  with drift  -> auto.arima
-# ARIMA(1,0,0)(0,1,1)[12]
-# ARIMA(0,1,0)(0,0,2)[12] -> worst
-# ARIMA(2,1,0)(0,0,2)[12]
-# ARIMA(0,0,2)(0,1,2)[12]
-# ARIMA(1,0,1)(0,1,1)[12]
-# ARIMA(1,0,1)(1,1,1)[12]
-# ARIMA(1,0,1)(1,1,1)[12] with drift 
-# ARIMA(1,0,12)(0,1,2)[12] with drift  -> best
-# ARIMA(1,0,12)(0,1,2)[12] 
-# ARIMA(1,0,12)(0,1,1)[12]
-# ARIMA(1,0,12)(0,1,1)[12] with drift
+# ARIMA(1,0,1)(2,1,2)[12] -> auto.arima
+# 0.8173506 0.8100026 0.1107434 0.3327814 0.2471304 1.612489 148.0625
 
 # After finding the best model, use it for forecasting, and
 # add the forecasts to the artificial training dataset.
@@ -2027,4 +1918,3 @@ ggplot(cinema_predictions_df, aes(x = date)) +
                                 "No interpolation" = "green",
                                 "COVID Interpolated Mean" = "blue",
                                 "COVID Interpolated Forecast" = "purple"))
-
