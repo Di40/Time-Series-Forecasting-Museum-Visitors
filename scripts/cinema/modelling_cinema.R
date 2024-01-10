@@ -954,8 +954,8 @@ components_dfts <- decompose(cinema_visitors_train_ts)
 plot(components_dfts)
 
 HW_initial <- HoltWinters(cinema_visitors_train_ts) # Smoothing parameters: alpha: 0.5617419, beta: 0.01097067, gamma: 0.9179943
-Exp_Smooth_HW <- HoltWinters(cinema_visitors_train_ts, alpha=0.2, beta=0.15, gamma=0.15)
-
+Exp_Smooth_HW <- HoltWinters(cinema_visitors_train_ts, alpha=0.21, beta=0.13, gamma=0.1)
+#best for now alpha=0.21, beta=0.13, gamma=0.1
 # Visually evaluate the fits
 plot(cinema_visitors_train_ts, ylab="Egizio visitors")
 lines(HW_initial$fitted[,1], lty=2, col="blue")
