@@ -413,32 +413,26 @@ ggplot(cinema_predictions_df, aes(x = date)) +
 cinema_train_ts_df <- data.frame(
   date_numeric = ts(cinema_train_df$date_numeric, frequency = 12),
   visitors = ts(cinema_train_df$visitors, frequency = 12),
-  trends = ts(cinema_train_df$trends, frequency = 12),
+  google_trends = ts(cinema_train_df$trends, frequency = 12),
   average_temperature = ts(cinema_train_df$average_temperature, frequency = 12),
   raining_days = ts(cinema_train_df$raining_days, frequency = 12),
   school_holidays = ts(cinema_train_df$school_holidays, frequency = 12),
   arrivals = ts(cinema_train_df$arrivals, frequency = 12),
   covid = ts(cinema_train_df$Covid_closures, frequency = 12),
-  # lagged,
-  lagged_trends = ts(cinema_train_df$lagged_trends, frequency = 12),
+  # lagged:
+  lagged_google_trends = ts(cinema_train_df$lagged_trends, frequency = 12),
   lagged_average_temperature = ts(cinema_train_df$lagged_average_temperature, frequency = 12),
   lagged_raining_days = ts(cinema_train_df$lagged_raining_days, frequency = 12),
   lagged_school_holidays = ts(cinema_train_df$lagged_school_holidays, frequency = 12),
-  lagged_arrivals = ts(cinema_train_df$lagged_arrivals, frequency = 12)
+  lagged_arrivals = ts(cinema_train_df$lagged_arrivals, frequency = 12),
+  lagged_covid = ts(cinema_train_df$lagged_covid_closures, frequency = 12)
 )
 
 # Fit the model on the training set
-tslm_manual <- tslm(visitors ~ .
-                    - covid
-                    - raining_days
-                    - lagged_raining_days
-                    - lagged_trends
-                    - lagged_school_holidays
-                    - average_temperature
-                    - date_numeric
-                    - school_holidays
-                    - lagged_average_temperature
-                    - lagged_renovation,
+tslm_manual <- tslm(visitors ~ . - date_numeric - lagged_average_temperature
+                    - lagged_school_holidays - average_temperature
+                    - raining_days - lagged_raining_days - lagged_arrivals
+                    - school_holidays - covid - lagged_covid - lagged_google_trends,
                     data = cinema_train_ts_df)
 summary(tslm_manual)
 
@@ -458,20 +452,19 @@ CV(tslm_manual)
 test_data <- data.frame(
   date_numeric = ts(cinema_test_df$date_numeric, frequency = 12),
   visitors = ts(cinema_test_df$visitors, frequency = 12),
-  trends = ts(cinema_test_df$trends, frequency = 12),
+  google_trends = ts(cinema_test_df$trends, frequency = 12),
   average_temperature = ts(cinema_test_df$average_temperature, frequency = 12),
   raining_days = ts(cinema_test_df$raining_days, frequency = 12),
   school_holidays = ts(cinema_test_df$school_holidays, frequency = 12),
   arrivals = ts(cinema_test_df$arrivals, frequency = 12),
   covid = ts(cinema_test_df$Covid_closures, frequency = 12),
-  renovation = ts(cinema_test_df$renovation, frequency = 12),
-  # lagged,
-  lagged_trends = ts(cinema_test_df$lagged_trends, frequency = 12),
+  # lagged:
+  lagged_google_trends = ts(cinema_test_df$lagged_trends, frequency = 12),
   lagged_average_temperature = ts(cinema_test_df$lagged_average_temperature, frequency = 12),
   lagged_raining_days = ts(cinema_test_df$lagged_raining_days, frequency = 12),
   lagged_school_holidays = ts(cinema_test_df$lagged_school_holidays, frequency = 12),
   lagged_arrivals = ts(cinema_test_df$lagged_arrivals, frequency = 12),
-  lagged_renovation = ts(cinema_test_df$lagged_renovation, frequency = 12)
+  lagged_covid = ts(cinema_test_df$lagged_covid_closures, frequency = 12)
 )
 
 fcast <- forecast(tslm_manual, newdata = test_data, h = nrow(cinema_test_df))
@@ -509,12 +502,12 @@ ggplot(cinema_predictions_df, aes(x = date)) +
 
 # We will utilize Time-series Cross-validation
 
-y_train <- egizio_train_df$visitors
-X_train <- egizio_train_df[, -which(names(egizio_train_df) %in% c("date", "visitors"))]
+y_train <- cinema_train_df$visitors
+X_train <- cinema_train_df[, -which(names(cinema_train_df) %in% c("date", "visitors"))]
 X_train <- X_train[, !startsWith(names(X_train), "lagged_")]
 # Performs better without the lagged variables, so we exclude them.
 
-X_test <- egizio_test_df[, -which(names(egizio_test_df) %in% c("date", "visitors"))]
+X_test <- cinema_test_df[, -which(names(cinema_test_df) %in% c("date", "visitors"))]
 X_test <- X_test[, !startsWith(names(X_test), "lagged_")]
 
 # Convert data to matrix format
@@ -555,17 +548,17 @@ cat('dev.ratio:', best_l1_or_l2_regularization_model$dev.ratio)
 # Dev ratio without lagged regressors: 0.6616036.
 
 plot.ts(predict(best_l1_or_l2_regularization_model, newx=X_train, s=best_lambda))
-lines(egizio_train_df$visitors,col=2)
+lines(cinema_train_df$visitors,col=2)
 
 # Perform predictions on the test set
-egizio_predictions_df$predicted_visitors_l1_or_l2_regularization_tscv <-
+cinema_predictions_df$predicted_visitors_l1_or_l2_regularization_tscv <-
   predict(best_l1_or_l2_regularization_model, newx = X_test, s = best_lambda)
 
 # Calculate metrics
-mse <- mse(egizio_test_df$visitors, egizio_predictions_df$predicted_visitors_l1_or_l2_regularization_tscv)
-rmse <- rmse(egizio_test_df$visitors, egizio_predictions_df$predicted_visitors_l1_or_l2_regularization_tscv)
-mae <- mae(egizio_test_df$visitors, egizio_predictions_df$predicted_visitors_l1_or_l2_regularization_tscv)
-mape <- mape(egizio_test_df$visitors, egizio_predictions_df$predicted_visitors_l1_or_l2_regularization_tscv)
+mse <- mse(cinema_test_df$visitors, cinema_predictions_df$predicted_visitors_l1_or_l2_regularization_tscv)
+rmse <- rmse(cinema_test_df$visitors, cinema_predictions_df$predicted_visitors_l1_or_l2_regularization_tscv)
+mae <- mae(cinema_test_df$visitors, cinema_predictions_df$predicted_visitors_l1_or_l2_regularization_tscv)
+mape <- mape(cinema_test_df$visitors, cinema_predictions_df$predicted_visitors_l1_or_l2_regularization_tscv)
 
 metrics_df <- rbind(metrics_df, list(Model = "L1/L2 Regularization TS CV",
                                      R2 = NA, R2_adj = NA,
@@ -574,11 +567,11 @@ metrics_df <- rbind(metrics_df, list(Model = "L1/L2 Regularization TS CV",
 print(metrics_df)
 
 # Plot predictions 
-plot(egizio_test_df$visitors, egizio_predictions_df$predicted_visitors_lasso_tscv,
+plot(cinema_test_df$visitors, cinema_predictions_df$predicted_visitors_lasso_tscv,
      ylab="Predictions", xlab="True")
 abline(0,1)
 
-ggplot(egizio_predictions_df, aes(x = date)) +
+ggplot(cinema_predictions_df, aes(x = date)) +
   geom_line(aes(y = visitors_true, color = "Visitors"), linewidth = 1) +
   geom_line(aes(y = predicted_visitors_l1_or_l2_regularization_tscv, color = "Predicted"),
             linetype = "dashed", linewidth = 1) +
@@ -593,46 +586,30 @@ ggplot(egizio_predictions_df, aes(x = date)) +
 # Stepwise GAM
 
 # Start with a linear model (df=1)
-gam1 <- gam(visitors ~. - date, data=egizio_train_df)
+gam1 <- gam(visitors ~. - date - date_numeric, data=cinema_train_df)
 summary(gam1)
-AIC(gam1) # 302.4844
+AIC(gam1) # 344.7018
 
-sc <- gam.scope(egizio_train_df[, -which(names(egizio_train_df) %in% c("date", "visitors"))],
+sc <- gam.scope(cinema_train_df[, -which(names(cinema_train_df) %in% c("date", "visitors"))],
                 arg = c("df=2", "df=3", "df=4"))
 step_gam <- step.Gam(gam1, scope = sc, trace = TRUE)
 summary(step_gam)
-AIC(step_gam) # 177.3217 
+AIC(step_gam) # 222.8829
 
 # Prediction
-p.gam1 <- predict(gam1, newdata=egizio_test_df)     # Bigger AIC
-p.gam <- predict(step_gam, newdata=egizio_test_df)  # Smaller AIC   
-cat('Deviance:', sum((p.gam - egizio_test_df$visitors)^2))
-cat('Deviance gam1 :', sum((p.gam1 - egizio_test_df$visitors)^2)) # gam 1 has smaller deviance
-colnames(egizio_train_df)
+p.gam1 <- predict(gam1, newdata=cinema_test_df)     # Bigger AIC
+p.gam <- predict(step_gam, newdata=cinema_test_df)  # Smaller AIC   
+cat('Deviance:', sum((p.gam - cinema_test_df$visitors)^2))
+cat('Deviance gam1 :', sum((p.gam1 - cinema_test_df$visitors)^2)) # gam 1 has smaller deviance
 
-# gam_visitors <- gam(visitors ~ s(date_numeric) + s(year) + s(month)
-#                    + s(trends) + s(average_temperature)
-#                    + s(school_holidays) + s(arrivals)
-#                    +  + s(lagged_trends)
-#                    + s(lagged_average_temperature)
-#                    + s(lagged_school_holidays),
-#                    data = egizio_train_df)
-# Order of removal:
-# - s(lagged_raining_days) - lagged_renovation - renovation - Covid_closures
-# - s(lagged_arrivals) - s(raining_days)
-# summary(gam_visitors)
-# AIC(gam_visitors) # 217.246
-
-egizio_predictions_df$predicted_gam <- predict(step_gam, newdata=egizio_test_df)  
+cinema_predictions_df$predicted_gam <- predict(step_gam, newdata=cinema_test_df)  
 
 # Calculate metrics
-#r_squared <- summary(step_gam)$r.squared
-#adj_r_squared <- summary(step_gam)$adj.r.squared
 aic <- AIC(step_gam)
-mse <- mse(egizio_test_df$visitors, egizio_predictions_df$predicted_gam)
-rmse <- rmse(egizio_test_df$visitors, egizio_predictions_df$predicted_gam)
-mae <- mae(egizio_test_df$visitors, egizio_predictions_df$predicted_gam)
-mape <- mape(egizio_test_df$visitors, egizio_predictions_df$predicted_gam)
+mse <- mse(cinema_test_df$visitors, cinema_predictions_df$predicted_gam)
+rmse <- rmse(cinema_test_df$visitors, cinema_predictions_df$predicted_gam)
+mae <- mae(cinema_test_df$visitors, cinema_predictions_df$predicted_gam)
+mape <- mape(cinema_test_df$visitors, cinema_predictions_df$predicted_gam)
 
 metrics_df <- rbind(metrics_df, list(Model = "GAM Stepwise",
                                      R2 = NA, R2_adj = NA,
@@ -641,11 +618,11 @@ metrics_df <- rbind(metrics_df, list(Model = "GAM Stepwise",
 print(metrics_df)
 
 # Plot predictions 
-plot(egizio_test_df$visitors, egizio_predictions_df$predicted_gam,
+plot(cinema_test_df$visitors, cinema_predictions_df$predicted_gam,
      ylab="Predictions", xlab="True")
 abline(0,1)
 
-ggplot(egizio_predictions_df, aes(x = date)) +
+ggplot(cinema_predictions_df, aes(x = date)) +
   geom_line(aes(y = visitors_true, color = "Visitors"), linewidth = 1) +
   geom_line(aes(y = p.gam, color = "Predicted"),
             linetype = "dashed", linewidth = 1) +
@@ -656,74 +633,58 @@ ggplot(egizio_predictions_df, aes(x = date)) +
 # --------------------------------------------------------------------- #
 # Model 7 - Generalized Bass Model (with shock)
 
-egizio_train_unstandardized_df <- egizio_train_df_copy
+cinema_train_unstandardized_df <- cinema_train_df_copy
 
 # First we obtain the needed coefficients using BM:
-bm_visitors <- BM(egizio_train_unstandardized_df$visitors, display = TRUE)
+bm_visitors <- BM(cinema_train_unstandardized_df$visitors, display = TRUE)
 summary(bm_visitors)
 
-m <- 1.878697e+07 
-p <- 1.642189e-03
-q <- 9.073474e-03
+m <- 1.365561e+07 
+p <- 2.483577e-03
+q <- 9.816231e-03
 
 # Predictions and instantaneous curve for BM
 pred_bm_visitors <- predict(bm_visitors, newx = 1:216)
 pred_inst_bm_visitors <- make.instantaneous(pred_bm_visitors)
 
 # Plotting BM predictions
-plot(egizio_train_unstandardized_df$visitors, type = "b", xlab = "Month", ylab = "Monthly Visitors", 
+plot(cinema_train_unstandardized_df$visitors, type = "b", xlab = "Month", ylab = "Monthly Visitors", 
      pch = 16, lty = 3, cex = 0.6, xlim = c(1, 216))
 lines(pred_inst_bm_visitors, lwd = 2, col = 2)
 
 # Try with shock
 
-# One exponential shock - This models the shock of 2015
-gbm_e1 <- GBM(egizio_train_unstandardized_df$visitors, shock = "exp", nshock = 1, alpha = 0.04,
-              prelimestimates = c(m, p, q, 124, -0.1, 0.5))
+# One exponential shock - This models the shock of COVID
+gbm_e1 <- GBM(cinema_train_unstandardized_df$visitors, shock = "exp", nshock = 1, alpha = 0.04,
+              prelimestimates = c(m, p, q, 183, -0.1, -0.5))
 summary(gbm_e1)
 
-# Two exponential shocks - This models both the 2015 and Covid shock    
-gbm_e2 <- GBM(egizio_train_unstandardized_df$visitors, shock = "exp", nshock = 2, alpha = 0.04,
-              prelimestimates = c(m, p, q, 124, -0.1, 0.5, 183 , -0.1, -0.5))
-summary(gbm_e2)   
+# One rectangular shock
+gbm_r1 <- GBM(cinema_train_unstandardized_df$visitors, shock = "rett", nshock = 1,
+              prelimestimates = c(m, p, q, 183, 196, -0.4), oos=10)
+summary(gbm_r1)
 
-# Two rectangular shocks
-gbm_r2 <- GBM(egizio_train_unstandardized_df$visitors, shock = "rett", nshock = 2,
-              prelimestimates = c(m, p, q, 124, 183, 0.1, 183, 196, -0.4), oos=10)
-summary(gbm_r2)
-
-# Three exponential shocks
-gbm_e3 <- GBM(egizio_train_unstandardized_df$visitors, shock = "exp", nshock = 3,
-              prelimestimates = c(m, p, q,  124, -0.1, 0.2, 160, 0.1, -0.4, 196, -0.1, +0.6))
-summary(gbm_e3)
-
-# Exponential + rectangular shocks
-gbm_er <- GBM(egizio_train_unstandardized_df$visitors, shock = "mixed", nshock = 2,
-              prelimestimates = c(m, p, q, 124, -0.1, 0.2, 183, 196, -0.4),oos=10)
-summary(gbm_er)
-
-# The best candidates were: exp + rectangular and two rectangular.
-# Decided to proceed with two rectangular shocks.
-best_gbm <- gbm_r2
+# Decided to proceed with the rectangular shocks.
+best_gbm <- gbm_r1
 
 pred_GBM_visitors<- predict(best_gbm, newx=c(1:216))
 pred_GBM_visitors.inst<- make.instantaneous(pred_GBM_visitors)
 
 # Plotting GBM predictions
-plot(egizio_train_unstandardized_df$visitors, type = "b",
+plot(cinema_train_unstandardized_df$visitors, type = "b",
      xlab = "Month", ylab = "Monthly Visitors", 
      pch = 16, lty = 3, cex = 0.6, xlim = c(1, 216))
 lines(pred_GBM_visitors.inst, lwd = 2, col = 2)
 
 # Calculate metrics
-egizio_predictions_df$predicted_visitors_generalized_bass_model <- pred_GBM_visitors.inst[205:216]
+cinema_predictions_df$predicted_visitors_generalized_bass_model <- pred_GBM_visitors.inst[205:216]
 # Standardize:
-egizio_predictions_df$predicted_visitors_generalized_bass_model <- (egizio_predictions_df$predicted_visitors_generalized_bass_model - mean(egizio_train_unstandardized_df$visitors)) / sd(egizio_train_unstandardized_df$visitors)
-adj_r_squared <- adjusted_R2(egizio_train_unstandardized_df$visitors, pred_GBM_visitors.inst[1:204], nrow(egizio_train_df), length(best_gbm$coefficients))
-mse <- mse(egizio_test_df$visitors, egizio_predictions_df$predicted_visitors_generalized_bass_model)
-rmse <- rmse(egizio_test_df$visitors, egizio_predictions_df$predicted_visitors_generalized_bass_model)
-mae <- mae(egizio_test_df$visitors, egizio_predictions_df$predicted_visitors_generalized_bass_model)
-mape <- mape(egizio_test_df$visitors, egizio_predictions_df$predicted_visitors_generalized_bass_model)
+cinema_predictions_df$predicted_visitors_generalized_bass_model <- (cinema_predictions_df$predicted_visitors_generalized_bass_model - mean(cinema_train_unstandardized_df$visitors)) / sd(cinema_train_unstandardized_df$visitors)
+adj_r_squared <- adjusted_R2(cinema_train_unstandardized_df$visitors, pred_GBM_visitors.inst[1:204], nrow(cinema_train_df), length(best_gbm$coefficients))
+mse <- mse(cinema_test_df$visitors, cinema_predictions_df$predicted_visitors_generalized_bass_model)
+rmse <- rmse(cinema_test_df$visitors, cinema_predictions_df$predicted_visitors_generalized_bass_model)
+mae <- mae(cinema_test_df$visitors, cinema_predictions_df$predicted_visitors_generalized_bass_model)
+mape <- mape(cinema_test_df$visitors, cinema_predictions_df$predicted_visitors_generalized_bass_model)
 
 metrics_df <- rbind(metrics_df, list(Model = "Generalized Bass Model - 2R",
                                      R2 = best_gbm$Rsquared, R2_adj = NA,
@@ -732,7 +693,7 @@ metrics_df <- rbind(metrics_df, list(Model = "Generalized Bass Model - 2R",
 print(metrics_df)
 
 # Plot predictions 
-ggplot(egizio_predictions_df, aes(x = date)) +
+ggplot(cinema_predictions_df, aes(x = date)) +
   geom_line(aes(y = visitors_true, color = "Visitors"), linewidth = 1) +
   geom_line(aes(y = predicted_visitors_generalized_bass_model, color = "Predicted"),
             linetype = "dashed", linewidth = 1) +
@@ -743,18 +704,18 @@ ggplot(egizio_predictions_df, aes(x = date)) +
 
 # This model is good just for modelling the trend.
 
-plot(egizio_test_df$visitors, egizio_predictions_df$predicted_visitors_lasso_tscv,
+plot(cinema_test_df$visitors, cinema_predictions_df$predicted_visitors_lasso_tscv,
      ylab="Predictions", xlab="True")
 abline(0,1)
 
 # GGM
-GGM_model <- GGM(egizio_train_unstandardized_df$visitors, prelimestimates=c(m, 0.001, 0.01, p, q))
+GGM_model <- GGM(cinema_train_unstandardized_df$visitors, prelimestimates=c(m, 0.001, 0.01, p, q))
 summary(GGM_model)
 
 pred_GGM <- predict(GGM_model, newx=c(1:216))
 pred_GGM.inst <- make.instantaneous(pred_GGM)
 
-plot.ts(egizio_train_unstandardized_df$visitors)
+plot.ts(cinema_train_unstandardized_df$visitors)
 lines(pred_GGM.inst, lwd=2, col=2)
 
 # Analysis of residuals
@@ -763,22 +724,22 @@ acf <- acf(res_GGM)
 
 # --------------------------------------------------------------------- #
 # Model 8 - Auto ARIMA
-egizio_visitors_train_ts <- ts(egizio_train_df$visitors, frequency = 12)
+cinema_visitors_train_ts <- ts(cinema_train_df$visitors, frequency = 12)
 
-auto_arima <- auto.arima(egizio_visitors_train_ts)
-summary(auto_arima) # AIC=364.99
+auto_arima <- auto.arima(cinema_visitors_train_ts)
+summary(auto_arima) # AIC=298.95
 
 predicted_visitors_auto_arima <- forecast(auto_arima, h=12)
-egizio_predictions_df$predicted_visitors_auto_arima <- predicted_visitors_auto_arima$mean
+cinema_predictions_df$predicted_visitors_auto_arima <- predicted_visitors_auto_arima$mean
 
 # Calculate metrics for ARIMA
 train_predictions <- fitted(auto_arima)
-r_squared <- RSQUARE(egizio_train_df$visitors, train_predictions)
-adj_r_squared <- adjusted_R2(egizio_train_df$visitors, train_predictions, length(egizio_train_df$visitors), length(coef(auto_arima)))
-mse <- mse(egizio_test_df$visitors, egizio_predictions_df$predicted_visitors_auto_arima)
-rmse <- rmse(egizio_test_df$visitors, egizio_predictions_df$predicted_visitors_auto_arima)
-mae <- mae(egizio_test_df$visitors, egizio_predictions_df$predicted_visitors_auto_arima)
-mape <- mape(egizio_test_df$visitors, egizio_predictions_df$predicted_visitors_auto_arima)
+r_squared <- RSQUARE(cinema_train_df$visitors, train_predictions)
+adj_r_squared <- adjusted_R2(cinema_train_df$visitors, train_predictions, length(cinema_train_df$visitors), length(coef(auto_arima)))
+mse <- mse(cinema_test_df$visitors, cinema_predictions_df$predicted_visitors_auto_arima)
+rmse <- rmse(cinema_test_df$visitors, cinema_predictions_df$predicted_visitors_auto_arima)
+mae <- mae(cinema_test_df$visitors, cinema_predictions_df$predicted_visitors_auto_arima)
+mape <- mape(cinema_test_df$visitors, cinema_predictions_df$predicted_visitors_auto_arima)
 aic <- AIC(auto_arima)
 
 # Update metrics_df with ARIMA metrics
@@ -788,7 +749,7 @@ metrics_df <- rbind(metrics_df, list(Model = "Auto ARIMA",
                                      MAPE = mape, AIC = aic))
 print(metrics_df)
 
-ggplot(egizio_predictions_df, aes(x = date)) +
+ggplot(cinema_predictions_df, aes(x = date)) +
   geom_line(aes(y = visitors_true, color = "Visitors"), linewidth = 1) +
   geom_line(aes(y = predicted_visitors_auto_arima, color = "Predicted"),
             linetype = "dashed", linewidth = 1) +
@@ -797,10 +758,10 @@ ggplot(egizio_predictions_df, aes(x = date)) +
        y = "Values") +
   scale_color_manual(values = c("Visitors" = "red", "Predicted" = "blue"))
 
-plot(egizio_visitors_train_ts)
+plot(cinema_visitors_train_ts)
 
-egizio_ts_df <- diff(egizio_visitors_train_ts)
-p_ts_df <- autoplot(egizio_ts_df, xlab = "Time", ylab = "Visitors")
+cinema_ts_df <- diff(cinema_visitors_train_ts)
+p_ts_df <- autoplot(cinema_ts_df, xlab = "Time", ylab = "Visitors")
 
 plot(p_ts_df)
 # By differentiating the series, we can see that it
@@ -808,8 +769,8 @@ plot(p_ts_df)
 
 # Next, we will check the residuals of the differentiated series in
 # order to see if there are again some important behaviors:
-p_acf_df <- ggAcf(egizio_ts_df)
-p_pacf_df <- ggPacf(egizio_ts_df)
+p_acf_df <- ggAcf(cinema_ts_df)
+p_pacf_df <- ggPacf(cinema_ts_df)
 
 grid.arrange(p_acf_df, p_pacf_df, nrow = 2)
 # We see that the lag at time 12 and 24 are relevant as always.
@@ -819,60 +780,26 @@ grid.arrange(p_acf_df, p_pacf_df, nrow = 2)
 
 # --------------------------------------------------------------------- #
 # Model 9 - SARIMA
-sarima <- Arima(egizio_visitors_train_ts, order = c(1,1,2), seasonal = c(1,1,2)) # Best model initially
-summary(sarima) # AIC=323.37
+sarima_improved <- Arima(cinema_visitors_train_ts, order = c(1,0,1), seasonal = c(0,1,2)) # Best model initially
+summary(sarima_improved)  # include.drift = TRUE
+# Arima (1,1,2) (1,1,2) : AIC=301.65 RMSE=0.4676794
+# Arima (0,1,2) (0,1,2) : AIC=299.99 RMSE=0.4817189
+# Arima (0,1,0) (0,0,2) : AIC=380.86 RMSE=0.5976933
+# Arima (2,1,0) (0,0,2) : AIC=367.39 RMSE=0.5724812
+# Arima (0,0,2) (0,1,2) : AIC=338.34 RMSE=0.5100456
+# Arima (1,0,1) (0,1,1) : AIC=302.05 RMSE=0.494153 
+# Arima (1,0,0) (0,1,1) : AIC=300.19 RMSE=0.4947074
+# Arima (1,0,1) (1,1,1) : AIC=299.58 RMSE=0.462234  <- LOWEST AIC # 0.4361038 MSE
+# Arima (1,0,12) (0,1,2): AIC=315.3  RMSE=0.3677237 <- LOWEST RMSE
+# Arima (1,0,12) (0,1,1): AIC=298.14 RMSE=0.4569909 <- best for the residuals
 
-# Arima (0,1,2) (0,1,2) : AIC=327.28
-# Arima (0,1,0) (0,0,2) : AIC=396.58 
-# Arima (2,1,0) (0,0,2) : AIC=380.23
-# Arima (0,0,2) (0,1,2) : AIC=333.78
-# --> with this model it's clear that there's a pattern that
-#     the model is nor so able to understand
-
-# Comparison between the original time series and values fitted by the ARIMA model.
-ggplot(data = egizio_train_df,
-       aes(x = date,
-           y = as.numeric(egizio_visitors_train_ts))) +
-  geom_line(color = "blue") +  
-  geom_line(aes(y = fitted(sarima)), color = "red", linetype = "twodash") +
-  ylab("Visitors") +
-  labs(title = "True vs Fitted values by SARIMA")
-
-ggplot(aes(date, y = as.numeric(residuals(sarima))), data = egizio_train_df) +
-  geom_point(color = "blue") + xlab("Date") + ylab("Residuals") + ggtitle("Residuals of Arima")
-
-# This model is improved bellow, so metrics aren't calculated here.
-
-# Added by Dejan
-
-# First difference
-diff1 <- diff(egizio_visitors_train_ts) # default lag=1
-tsdisplay(diff1)
-# We removed the trend, but we see the seasonality better.
-
-# Seasonal difference
-diff12 <- diff(egizio_visitors_train_ts, lag=12) 
-tsdisplay(diff12)
-# The series no longer has seasonality.
-
-# Arima (1,0,1) (0,1,1) : AIC=321.27 MSE=1.5944751 -> predictions follow the pattern, but are underestimated
-# Arima (1,0,0) (0,1,1) : AIC=325.61 MSE=1.4843500 -> predictions follow the pattern, but are underestimated
-# Arima (1,0,1) (1,1,1) : AIC=318.99 MSE=1.6191393 -> predictions follow the pattern, but are underestimated
-# Arima (1,0,12) (0,1,2): AIC=315.3  MSE=0.3677237 -> best predictions (they follow the pattern and are close to the original ones)
-# Arima (1,0,12) (0,1,1): AIC=313.65 MSE=0.3965948 -> good predictions (they follow the pattern and are close to the original ones, just the last point is bad)
-
-egizio_visitors_train_ts <- ts(egizio_train_df$visitors, frequency = 12)
-
-# Best model according to AIC, with low MSE:
-sarima_improved <- Arima(egizio_visitors_train_ts, order = c(1,0,12),
-                         seasonal = c(0,1,1), include.drift = TRUE)
-summary(sarima_improved) 
+cinema_visitors_train_ts <- ts(cinema_train_df$visitors, frequency = 12)
 
 train_predictions_sarima <- fitted(sarima_improved)
 
-ggplot(data = egizio_train_df,
+ggplot(data = cinema_train_df,
        aes(x = date,
-           y = as.numeric(egizio_visitors_train_ts))) +
+           y = as.numeric(cinema_visitors_train_ts))) +
   geom_line(color = "blue") +  
   geom_line(aes(y = train_predictions_sarima),
             color = "red", linetype = "twodash") +
@@ -880,20 +807,20 @@ ggplot(data = egizio_train_df,
   labs(title = "True vs Fitted values by ARIMA")
 
 # Residuals
-ggplot(aes(date, y = as.numeric(residuals(sarima_improved))), data = egizio_train_df) +
+ggplot(aes(date, y = as.numeric(residuals(sarima_improved))), data = cinema_train_df) +
   geom_point(color = "blue") + xlab("Date") + ylab("Residuals") + ggtitle("Residuals of Arima")
 checkresiduals(sarima_improved)
 
 pred_sarima_improved <- forecast(sarima_improved, h = 12)
-egizio_predictions_df$predicted_visitors_sarima <- pred_sarima_improved$mean
+cinema_predictions_df$predicted_visitors_sarima <- pred_sarima_improved$mean
 
 # Calculate metrics
-r_squared <- RSQUARE(egizio_train_df$visitors, train_predictions_sarima)
-adj_r_squared <- adjusted_R2(egizio_train_df$visitors, train_predictions_sarima, length(egizio_train_df$visitors), length(coef(sarima_improved)))
-mse <- mse(egizio_test_df$visitors, egizio_predictions_df$predicted_visitors_sarima)
-rmse <- rmse(egizio_test_df$visitors, egizio_predictions_df$predicted_visitors_sarima)
-mae <- mae(egizio_test_df$visitors, egizio_predictions_df$predicted_visitors_sarima)
-mape <- mape(egizio_test_df$visitors, egizio_predictions_df$predicted_visitors_sarima)
+r_squared <- RSQUARE(cinema_train_df$visitors, train_predictions_sarima)
+adj_r_squared <- adjusted_R2(cinema_train_df$visitors, train_predictions_sarima, length(cinema_train_df$visitors), length(coef(sarima_improved)))
+mse <- mse(cinema_test_df$visitors, cinema_predictions_df$predicted_visitors_sarima)
+rmse <- rmse(cinema_test_df$visitors, cinema_predictions_df$predicted_visitors_sarima)
+mae <- mae(cinema_test_df$visitors, cinema_predictions_df$predicted_visitors_sarima)
+mape <- mape(cinema_test_df$visitors, cinema_predictions_df$predicted_visitors_sarima)
 aic <- AIC(sarima_improved)
 
 # Update metrics_df
@@ -903,7 +830,7 @@ metrics_df <- rbind(metrics_df, list(Model = "SARIMA - Improved",
                                      MAPE = mape, AIC = aic))
 print(metrics_df)
 
-ggplot(egizio_predictions_df, aes(x = date)) +
+ggplot(cinema_predictions_df, aes(x = date)) +
   geom_line(aes(y = visitors_true, color = "Visitors"), linewidth = 1) +
   geom_line(aes(y = predicted_visitors_sarima, color = "Predicted"),
             linetype = "dashed", linewidth = 1) +
@@ -922,17 +849,17 @@ png("../../plots/arima_plots.png", width = 1000, height = 1500)
 # mar.old <- par()$mar
 par(mfrow = c(7,2))
 par(mar=c(2,2,2,2))
-train_rows <- nrow(egizio_train_df) # 204
+train_rows <- nrow(cinema_train_df) # 204
 train_size <- 48 # initial
 val_size <- 12
 while (train_size <= train_rows) {
   # 48, 60, 72, ..., 204 -> total 14 windows will be created
-  train_w <- egizio_visitors_train_ts[1:train_size] # subset the training set
+  train_w <- cinema_visitors_train_ts[1:train_size] # subset the training set
   arima_w <- Arima(train_w, order = c(1,0,12), seasonal = c(0,1,1),
                    include.drift = TRUE) # try with different parameters
   pred_arima_w <- as.numeric(forecast(train_w, h = val_size)$mean)
   mse <- round(mse(train_w, pred_arima_w), 2)
-  plot(x = 1:(train_size+val_size), egizio_visitors_train_ts[1:(train_size+val_size)],
+  plot(x = 1:(train_size+val_size), cinema_visitors_train_ts[1:(train_size+val_size)],
        type = "l", xlab = "Time", ylab = "Visitors", lwd = 1.5,
        main = paste("MSE:", mse))
   #lines(x = (train_size-12):(train_size-1), y = tail(arima_w$fitted, 12), col = 2, lwd = 1.5)
@@ -952,55 +879,57 @@ dev.off()
 # To do this, we will start by analyzing the coefficients obtained using
 # stepwise regression and Lasso/Ridge Regularization.
 summary(stepwise_lr_selected_model)
-# year, month, trends, arrivals, lagged_arrivals, renovation1
+# trends, school_holidays, arrivals, Covid_closures1,
+# lagged_trends, lagged_arrivals, lagged_covid_closures1
 
 # print(coef(best_l1_or_l2_regularization_model))
 coefficients_l1_l2 <- coef(best_l1_or_l2_regularization_model)
 print(coefficients_l1_l2[order(abs(coefficients_l1_l2), decreasing = TRUE), ])
-# renovation, arrivals, trends, lagged_average_temperature, Covid_closures
+# arrivals, trends, Covid_closures, raining_days,
+# school_holidays, average_temperature
 
-# The coefficients in common are: renovation, arrivals, trends.
+# The coefficients in common are: arrivals, trends, Covid_closures, school_holidays.
 # Including month/year/date doesn't make sense for SARIMAX.
 
-regressors_train <- egizio_train_df[, c("renovation", "arrivals", "trends")]
+regressors_train <- cinema_train_df[, c("school_holidays", "Covid_closures", "arrivals", "trends")]
 regressors_train <- as.matrix(regressors_train)
 regressors_train <- apply(regressors_train, 2, as.numeric)
-# sarimax <- auto.arima(egizio_visitors_train_ts, xreg = regressors_train)
-sarimax <- Arima(egizio_visitors_train_ts, xreg = regressors_train,
-                 order = c(1,0,12), seasonal = c(0,1,1), include.drift = TRUE)
-summary(sarimax)
-# ARIMA(1,0,0) (0,1,1):  AIC=206.17, RMSE=0.3803622 -> auto.arima
-# ARIMA(1,0,12)(0,1,2): AIC=215.73, RMSE=0.3533746
-# ARIMA(1,0,12)(0,1,1): AIC=213.73, RMSE=0.3532834 -> lowest RMSE
-# ARIMA(1,0,1) (0,1,1):  AIC=209.91, RMSE=0.3804768
 
-ggplot(data = egizio_train_df, aes(x = date, y = visitors)) +
+regressors_test <- cinema_test_df[, c("school_holidays", "Covid_closures", "arrivals", "trends")]
+regressors_test <- as.matrix(regressors_test)
+regressors_test <- apply(regressors_test, 2, as.numeric)
+
+# sarimax <- auto.arima(cinema_visitors_train_ts, xreg = regressors_train) # 
+sarimax <- Arima(cinema_visitors_train_ts, xreg = regressors_train,
+                 order = c(1,0,12), seasonal = c(0,1,1), include.drift=TRUE)
+summary(sarimax)
+# ARIMA(1,1,0)(1,1,0):  AIC=253.86, RMSE=0.4346919 -> auto.arima
+# ARIMA(1,0,12)(0,1,2) with drift: AIC=219.39, RMSE=0.3463853 -> better
+# ARIMA(1,0,12)(0,1,1) with drift: AIC=219.4, RMSE=0.3427954
+
+ggplot(data = cinema_train_df, aes(x = date, y = visitors)) +
   geom_line(color = "blue") +  
   geom_line(aes(y = fitted(sarimax)), color = "red", linetype = "twodash") +
   ylab("Visitors") +
   labs(title = "True vs Fitted values by SARIMAX")
 
-ggplot(aes(date, y = as.numeric(residuals(sarimax))), data = egizio_train_df) +
+ggplot(aes(date, y = as.numeric(residuals(sarimax))), data = cinema_train_df) +
   geom_point(color = "blue") + xlab("Date") + ylab("Residuals") +
   ggtitle("Residuals of SARIMAX")
 
 # Forecasting
-regressors_test <- egizio_test_df[, c("renovation", "arrivals", "trends")]
-regressors_test <- as.matrix(regressors_test)
-regressors_test <- apply(regressors_test, 2, as.numeric)
-
 pred_sarimax <- forecast(sarimax, h = 12, xreg=regressors_test)
-egizio_predictions_df$predicted_visitors_sarimax <- pred_sarimax$mean
+cinema_predictions_df$predicted_visitors_sarimax <- pred_sarimax$mean
 
 train_predictions_sarimax <- fitted(sarimax)
 
 # Calculate metrics
-r_squared <- RSQUARE(egizio_train_df$visitors, train_predictions_sarimax)
-adj_r_squared <- adjusted_R2(egizio_train_df$visitors, train_predictions_sarimax, length(egizio_train_df$visitors), length(coef(sarimax)))
-mse <- mse(egizio_test_df$visitors, egizio_predictions_df$predicted_visitors_sarimax)
-rmse <- rmse(egizio_test_df$visitors, egizio_predictions_df$predicted_visitors_sarimax)
-mae <- mae(egizio_test_df$visitors, egizio_predictions_df$predicted_visitors_sarimax)
-mape <- mape(egizio_test_df$visitors, egizio_predictions_df$predicted_visitors_sarimax)
+r_squared <- RSQUARE(cinema_train_df$visitors, train_predictions_sarimax)
+adj_r_squared <- adjusted_R2(cinema_train_df$visitors, train_predictions_sarimax, length(cinema_train_df$visitors), length(coef(sarimax)))
+mse <- mse(cinema_test_df$visitors, cinema_predictions_df$predicted_visitors_sarimax)
+rmse <- rmse(cinema_test_df$visitors, cinema_predictions_df$predicted_visitors_sarimax)
+mae <- mae(cinema_test_df$visitors, cinema_predictions_df$predicted_visitors_sarimax)
+mape <- mape(cinema_test_df$visitors, cinema_predictions_df$predicted_visitors_sarimax)
 aic <- AIC(sarimax)
 
 # Update metrics_df
@@ -1010,7 +939,7 @@ metrics_df <- rbind(metrics_df, list(Model = "SARIMAX",
                                      MAPE = mape, AIC = aic))
 print(metrics_df)
 
-ggplot(egizio_predictions_df, aes(x = date)) +
+ggplot(cinema_predictions_df, aes(x = date)) +
   geom_line(aes(y = visitors_true, color = "Visitors"), linewidth = 1) +
   geom_line(aes(y = predicted_visitors_sarimax, color = "Predicted"),
             linetype = "dashed", linewidth = 1) +
@@ -1021,14 +950,14 @@ ggplot(egizio_predictions_df, aes(x = date)) +
 
 # --------------------------------------------------------------------- #
 # Model 11 - Exponential smoothing - Holt Winters
-components_dfts <- decompose(egizio_visitors_train_ts)
+components_dfts <- decompose(cinema_visitors_train_ts)
 plot(components_dfts)
 
-HW_initial <- HoltWinters(egizio_visitors_train_ts) # Smoothing parameters:alpha: 0.6785537, beta : 0.007338514, gamma: 1
-Exp_Smooth_HW <- HoltWinters(egizio_visitors_train_ts, alpha=0.2, beta=0.15, gamma=0.15)
+HW_initial <- HoltWinters(cinema_visitors_train_ts) # Smoothing parameters: alpha: 0.5617419, beta: 0.01097067, gamma: 0.9179943
+Exp_Smooth_HW <- HoltWinters(cinema_visitors_train_ts, alpha=0.2, beta=0.15, gamma=0.15)
 
 # Visually evaluate the fits
-plot(egizio_visitors_train_ts, ylab="Egizio visitors")
+plot(cinema_visitors_train_ts, ylab="Egizio visitors")
 lines(HW_initial$fitted[,1], lty=2, col="blue")
 lines(Exp_Smooth_HW$fitted[,1], lty=2, col="red")
 
@@ -1038,9 +967,9 @@ HW_initial_for <- forecast(HW_initial, h=12, level=c(80,95))
 plot(HW_initial_for)
 lines(HW_initial_for$fitted, lty=2, col="purple")
 
-HW_initial.pred <- predict(HW_initial, nrow(egizio_test_df), prediction.interval = TRUE, level=0.95)
+HW_initial.pred <- predict(HW_initial, nrow(cinema_test_df), prediction.interval = TRUE, level=0.95)
 # Visually evaluate the prediction
-plot(egizio_visitors_train_ts, ylab="visitors")
+plot(cinema_visitors_train_ts, ylab="visitors")
 lines(HW_initial$fitted[,1], lty=2, col="blue")
 lines(HW_initial.pred[,1], col="red") # This looks good
 lines(HW_initial.pred[,2], lty=2, col="orange")
@@ -1059,7 +988,7 @@ lines(HW_for$fitted, lty=2, col="green")
 
 HW.pred <- predict(Exp_Smooth_HW, 12, prediction.interval = TRUE, level=0.95)
 # Visually evaluate the prediction
-plot(egizio_visitors_train_ts, ylab="Egizio visitors")
+plot(cinema_visitors_train_ts, ylab="Egizio visitors")
 lines(Exp_Smooth_HW$fitted[,1], lty=2, col="blue")
 lines(HW.pred[,1], col="red") # This looks good
 lines(HW.pred[,2], lty=2, col="orange")
@@ -1067,14 +996,14 @@ lines(HW.pred[,3], lty=2, col="purple")
 
 # Exp_Smooth_HW works better. We will use it for forecasting.
 
-egizio_predictions_df$predicted_ESHW <- HW.pred[,1]
+cinema_predictions_df$predicted_ESHW <- HW.pred[,1]
 
 # Calculate metrics
-mse <- mse(egizio_test_df$visitors, egizio_predictions_df$predicted_ESHW)
-rmse <- rmse(egizio_test_df$visitors, egizio_predictions_df$predicted_ESHW)
-mae <- mae(egizio_test_df$visitors, egizio_predictions_df$predicted_ESHW)
-mape <- mape(egizio_test_df$visitors, egizio_predictions_df$predicted_ESHW)
-sse2 <- sse(egizio_test_df$visitors, egizio_predictions_df$predicted_ESHW )
+mse <- mse(cinema_test_df$visitors, cinema_predictions_df$predicted_ESHW)
+rmse <- rmse(cinema_test_df$visitors, cinema_predictions_df$predicted_ESHW)
+mae <- mae(cinema_test_df$visitors, cinema_predictions_df$predicted_ESHW)
+mape <- mape(cinema_test_df$visitors, cinema_predictions_df$predicted_ESHW)
+sse2 <- sse(cinema_test_df$visitors, cinema_predictions_df$predicted_ESHW )
 metrics_df <- rbind(metrics_df, list(Model = "Exp. smoothing Holt Winters",
                                      R2 = NA, R2_adj = NA,
                                      MSE = mse, RMSE = rmse, MAE = mae,
@@ -1087,9 +1016,9 @@ Box.test(HW_for$residuals, lag=20, type="Ljung-Box")
 hist(HW_for$residuals)
 
 # Multiplicative seasonality - Probably doesn't work!
-HW3 <- HoltWinters(egizio_visitors_train_ts, seasonal = "multiplicative")
+HW3 <- HoltWinters(cinema_visitors_train_ts, seasonal = "multiplicative")
 HW3.pred <- predict(HW3, 12, prediction.interval = TRUE, level=0.95)
-plot(egizio_visitors_train_ts, ylab="Visitors")
+plot(cinema_visitors_train_ts, ylab="Visitors")
 lines(HW3$fitted[,1], lty=2, col="blue")
 lines(HW3.pred[,1], col="red")
 lines(HW3.pred[,2], lty=2, col="orange")
@@ -1100,12 +1029,12 @@ lines(HW3.pred[,3], lty=2, col="purple")
 
 # the x and y arguments provide the x and y coordinates for the plot. 
 
-x <- egizio_train_df$date
-y <- egizio_train_df$visitors
+x <- cinema_train_df$date
+y <- cinema_train_df$visitors
 
 # We use geom_smooth in order to graphically see the results
 
-ggplot(data = egizio_train_df, 
+ggplot(data = cinema_train_df, 
        aes(x = date, y = visitors)) +
   geom_point() +
   xlab("Date") +
@@ -1116,7 +1045,7 @@ ggplot(data = egizio_train_df,
 # We use the loess.smooth method for computing the values.
 loess1_vis <- loess.smooth(x, y) # span = 2/3
 
-ggplot(data = egizio_train_df, 
+ggplot(data = cinema_train_df, 
        aes(x = date, y = visitors)) +
   geom_point() +
   xlab("Date") +
@@ -1126,7 +1055,7 @@ ggplot(data = egizio_train_df,
 
 loess2_vis <- loess.smooth(x,y, span = 0.9) 
 
-ggplot(data = egizio_train_df, 
+ggplot(data = cinema_train_df, 
        aes(x = date, y = visitors)) +
   geom_point() +
   xlab("Date") +
@@ -1138,7 +1067,7 @@ loess2_vis <- loess.smooth(x,y, span = 0.4)
 
 # Complete comparison:
 
-ggplot(data = egizio_train_df, aes(x = date, y = visitors)) +
+ggplot(data = cinema_train_df, aes(x = date, y = visitors)) +
   geom_point() + xlab("Date") + ylab("Visitors") + 
   ggtitle("Loess Model for Visitors") +
   geom_smooth(method = "loess", span = 2/3, se = F) +
@@ -1150,14 +1079,14 @@ ggplot(data = egizio_train_df, aes(x = date, y = visitors)) +
 # The orange one is the nearest to our model, but the best
 # compromise is given by the yellow one.
 # Smallest is the "span" value --> better is the interpolation
-#loess_pred_1 <- predict(loess1_vis, newdata = egizio_test_df$date)
-#loess_pred_2 <- predict(loess2_vis, newdata = data.frame(x = egizio_test_df$date_numeric))
+#loess_pred_1 <- predict(loess1_vis, newdata = cinema_test_df$date)
+#loess_pred_2 <- predict(loess2_vis, newdata = data.frame(x = cinema_test_df$date_numeric))
 
 # --------------------------------------------------------------------- #
 # CUBIC SPLINES
 
 x <- 1:204
-y <- egizio_train_df$visitors
+y <- cinema_train_df$visitors
 
 # We may select the internal-knots by using the degrees of freedom: 
 
@@ -1168,7 +1097,7 @@ y <- egizio_train_df$visitors
 # The knots are selected by using the quantiles of 'x' 
 # distribution 
 
-ggplot(data = egizio_train_df, aes(x = date, y = visitors)) +
+ggplot(data = cinema_train_df, aes(x = date, y = visitors)) +
   geom_point() + xlab("Date") + ylab("Visitors") +
   ggtitle("Loess Model for Visitors")
 
@@ -1180,7 +1109,7 @@ splines3_2 <- lm(y ~ bs(x, df = 5, degree = 3))
 summary(splines3_2) # 0.2347
 # 2-5 not significant
 # 1-3-4 significant
-ggplot(data = egizio_train_df, aes(x = date, y = visitors)) +
+ggplot(data = cinema_train_df, aes(x = date, y = visitors)) +
   geom_point() + xlab("Date") + ylab("Visitors") +
   ggtitle("Loess Model for Egizio Visitors") +
   geom_line(aes(y = splines3_2$fitted.values, color = "red"))
@@ -1190,7 +1119,7 @@ splines3_4 <- lm(y ~ bs(x, df = 7, degree = 3))
 summary(splines3_4) # 0.3328
 # 1-2-4 not significant
 # 3-5-6-7 significant
-ggplot(data = egizio_train_df, aes(x = date, y = visitors)) +
+ggplot(data = cinema_train_df, aes(x = date, y = visitors)) +
   geom_point() + xlab("Date") + ylab("Visitors") +
   ggtitle("Loess Model for Egizio Visitors") +
   geom_line(aes(y = splines3_4$fitted.values, color = "red"))
@@ -1199,7 +1128,7 @@ ggplot(data = egizio_train_df, aes(x = date, y = visitors)) +
 splines3_0 <- lm(y ~ bs(x, df = 3, degree = 3)) 
 summary(splines3_0) # 0.1787
 # 2 significant
-ggplot(data = egizio_train_df, aes(x = date, y = visitors)) +
+ggplot(data = cinema_train_df, aes(x = date, y = visitors)) +
   geom_point() + xlab("Date") + ylab("Visitors") +
   ggtitle("Loess Model for Egizio Visitors") +
   geom_line(aes(y = splines3_0$fitted.values, color = "red"))
@@ -1207,13 +1136,13 @@ ggplot(data = egizio_train_df, aes(x = date, y = visitors)) +
 # Model with 8 internal-knots
 splines3_8 <- lm(y ~ bs(x, df = 11, degree = 3)) 
 summary(splines3_8)
-ggplot(data = egizio_train_df, aes(x = date, y = visitors)) +
+ggplot(data = cinema_train_df, aes(x = date, y = visitors)) +
   geom_point() + xlab("Date") + ylab("Visitors") +
   ggtitle("Loess Model for Egizio Visitors") +
   geom_line(aes(y = splines3_8$fitted.values, color = "red"))
 
 
-#egizio_test_df$predicted_visitors <- predict(splines3_8, newdata =egizio_test_df$date)
+#cinema_test_df$predicted_visitors <- predict(splines3_8, newdata =cinema_test_df$date)
 # Best with degree = 3 --> 8 internal knots, df = 11
 
 # --------------------------------------------------------------------- #
@@ -1224,7 +1153,7 @@ splines4_2 <- lm(y ~ bs(x, df = 6, degree = 4))
 summary(splines4_2) # 0.3056 
 # 2-3-4 significant
 # 1-5-6 not significant
-ggplot(data = egizio_train_df, aes(x = date, y = visitors)) +
+ggplot(data = cinema_train_df, aes(x = date, y = visitors)) +
   geom_point() + xlab("Date") + ylab("Visitors") +
   ggtitle("Loess Model for Egizio Visitors") +
   geom_line(aes(y = splines4_2$fitted.values, color = "red"))
@@ -1234,7 +1163,7 @@ splines4_4 <- lm(y ~ bs(x, df = 8, degree = 4))
 summary(splines4_4) # 0.3647 
 # 1-2-3-4-5 not significant
 # 6-7-8 significant
-ggplot(data = egizio_train_df, aes(x = date, y = visitors)) +
+ggplot(data = cinema_train_df, aes(x = date, y = visitors)) +
   geom_point() + xlab("Date") + ylab("Visitors") + 
   ggtitle("Loess Model for Visitors") +
   geom_line(aes(y = splines4_4$fitted.values, color = "red"))
@@ -1244,7 +1173,7 @@ splines4_0 <- lm(y ~ bs(x, df = 4, degree = 4))
 summary(splines4_0) # 0.2224
 # 1-2-3 significant
 # 4 not significant
-ggplot(data = egizio_train_df, aes(x = date, y = visitors)) +
+ggplot(data = cinema_train_df, aes(x = date, y = visitors)) +
   geom_point() + xlab("Date") + ylab("Visitors") +
   ggtitle("Loess Model for Visitors") +
   geom_line(aes(y = splines4_0$fitted.values, color = "red"))
@@ -1254,7 +1183,7 @@ splines4_8 <- lm(y ~ bs(x, df = 12, degree = 4))
 summary(splines4_8) # 0.3717
 # 1-2-3-4-5-6-8-10-11 not significant
 # 7-9-12 significant
-ggplot(data = egizio_train_df, aes(x = date, y = visitors)) +
+ggplot(data = cinema_train_df, aes(x = date, y = visitors)) +
   geom_point() + xlab("Date") + ylab("Visitors") +
   ggtitle("Loess Model for Egizio Visitors") +
   geom_line(aes(y = splines4_8$fitted.values, color = "red"))
@@ -1270,14 +1199,14 @@ ggplot(data = egizio_train_df, aes(x = date, y = visitors)) +
 # Basic smooth splines
 
 sm_spline <- ss(x,y, method = "AIC")
-ggplot(data = egizio_train_df, aes(x = date, y = visitors)) +
+ggplot(data = cinema_train_df, aes(x = date, y = visitors)) +
   geom_point() + xlab("Date") + ylab("Visitors") +
   ggtitle("Loess Model for Egizio Visitors") +
   geom_line(aes(y = sm_spline$y, color = "red"))
 
 # Model 1
 sm_spline1 = ss(x,y, method = "AIC", lambda = 0.000001, all.knots = T)
-ggplot(data = egizio_train_df, aes(x = date, y = visitors)) +
+ggplot(data = cinema_train_df, aes(x = date, y = visitors)) +
   geom_point() + xlab("Date") + ylab("Visitors") +
   ggtitle("Loess Model for Egizio Visitors") +
   geom_line(aes(y = sm_spline1$y, color = "red"))
@@ -1285,7 +1214,7 @@ ggplot(data = egizio_train_df, aes(x = date, y = visitors)) +
 
 # Model with Cross Validation Method for parameter selection
 sm_spline_gcv <- ss(x,y, method = "GCV")
-ggplot(data = egizio_train_df, aes(x = date, y = visitors)) +
+ggplot(data = cinema_train_df, aes(x = date, y = visitors)) +
   geom_point() + xlab("Date") + ylab("Visitors") +
   ggtitle("Loess Model for Egizio Visitors") +
   geom_line(aes(y = sm_spline_gcv$y, color = "red"))
@@ -1305,15 +1234,15 @@ mai.new <- mai.old # new vector
 mai.new[2] <- 2.5 # new space on the left
 
 # This can be used visitors ~ .- visitors - date + as.numeric(date)
-boost_visitors <- gbm(visitors ~ . - date - date_numeric, data=egizio_train_df, 
+boost_visitors <- gbm(visitors ~ . - date - date_numeric, data=cinema_train_df, 
                       distribution="gaussian", n.trees=5000, interaction.depth=1)
 
 par(mai=mai.new)
 summary(boost_visitors, las=1, cBar=20)
 par(mai=mai.old)
 
-yhat_boost <- predict(boost_visitors, newdata=egizio_test_df, n.trees=1:5000)
-err <- apply(yhat_boost, 2, function(pred) mean((egizio_test_df$visitors - pred)^2))
+yhat_boost <- predict(boost_visitors, newdata=cinema_test_df, n.trees=1:5000)
+err <- apply(yhat_boost, 2, function(pred) mean((cinema_test_df$visitors - pred)^2))
 
 # Error comparison (train and test)
 plot(boost_visitors$train.error, type = "l", ylim = c(0, max(err)),
@@ -1325,7 +1254,7 @@ min_error <- min(err)
 title(main = sprintf("Min Error: %.4f", min_error))
 
 # 2 Boosting - Deeper trees
-boost_visitors <- gbm(visitors ~ . - date - date_numeric, data=egizio_train_df,
+boost_visitors <- gbm(visitors ~ . - date - date_numeric, data=cinema_train_df,
                       distribution="gaussian", n.trees=5000,
                       interaction.depth=4) # (with more than one variable)
 
@@ -1333,8 +1262,8 @@ par(mai=mai.new)
 summary(boost_visitors, las=1, cBar=20)
 par(mai=mai.old)
 
-yhat_boost <- predict(boost_visitors, newdata=egizio_test_df, n.trees=1:5000)
-err <- apply(yhat_boost, 2, function(pred) mean((egizio_test_df$visitors - pred)^2))
+yhat_boost <- predict(boost_visitors, newdata=cinema_test_df, n.trees=1:5000)
+err <- apply(yhat_boost, 2, function(pred) mean((cinema_test_df$visitors - pred)^2))
 
 # Error comparison (train and test)
 plot(boost_visitors$train.error, type = "l", ylim = c(0, max(err)),
@@ -1346,7 +1275,7 @@ min_error <- min(err)
 title(main = sprintf("Min Error: %.4f", min_error))
 
 # 3 Boosting - Smaller learning rate 
-boost_visitors <- gbm(visitors ~ . - date - date_numeric, data=egizio_train_df,
+boost_visitors <- gbm(visitors ~ . - date - date_numeric, data=cinema_train_df,
                       distribution="gaussian", n.trees=5000, interaction.depth=1,
                       shrinkage=0.01) # learning rate
 
@@ -1354,8 +1283,8 @@ par(mai=mai.new)
 summary(boost_visitors, las=1, cBar=20)
 par(mai=mai.old)
 
-yhat_boost <- predict(boost_visitors, newdata=egizio_test_df, n.trees=1:5000)
-err <- apply(yhat_boost, 2, function(pred) mean((egizio_test_df$visitors - pred)^2))
+yhat_boost <- predict(boost_visitors, newdata=cinema_test_df, n.trees=1:5000)
+err <- apply(yhat_boost, 2, function(pred) mean((cinema_test_df$visitors - pred)^2))
 
 # Error comparison (train and test)
 plot(boost_visitors$train.error, type = "l", ylim = c(0, max(err)),
@@ -1367,15 +1296,15 @@ min_error <- min(err)
 title(main = sprintf("Min Error: %.4f", min_error))
 
 # 4 Boosting - combination of previous models
-boost_visitors <- gbm(visitors ~ . - date - date_numeric, data=egizio_train_df,
+boost_visitors <- gbm(visitors ~ . - date - date_numeric, data=cinema_train_df,
                       distribution="gaussian", n.trees=5000,
                       interaction.depth=4, shrinkage=0.01)
 par(mai=mai.new)
 summary(boost_visitors, las=1, cBar=20)
 par(mai=mai.old)
 
-yhat_boost <- predict(boost_visitors, newdata=egizio_test_df, n.trees=1:5000)
-err <- apply(yhat_boost, 2, function(pred) mean((egizio_test_df$visitors - pred)^2))
+yhat_boost <- predict(boost_visitors, newdata=cinema_test_df, n.trees=1:5000)
+err <- apply(yhat_boost, 2, function(pred) mean((cinema_test_df$visitors - pred)^2))
 
 # Error comparison (train and test)
 plot(boost_visitors$train.error, type = "l", ylim = c(0, max(err)),
@@ -1388,7 +1317,7 @@ title(main = sprintf("Min Error: %.4f", min_error))
 
 # Time-series cross-validation
 
-ts_cv_spec <- time_series_cv(data = egizio_train_df,
+ts_cv_spec <- time_series_cv(data = cinema_train_df,
                              date_var = date,
                              initial = 48, # 4 years
                              assess = 12, # 1 year window for test
@@ -1408,12 +1337,12 @@ ts_cv_spec %>%
 
 run_cross_validation <- FALSE
 
-egizio_train_no_lagged_df <- egizio_train_df[, -which(names(egizio_train_df) %in% c("date", "month", "year"))]
-egizio_train_no_lagged_df <- egizio_train_no_lagged_df[, !startsWith(names(egizio_train_no_lagged_df), "lagged_")]
+cinema_train_no_lagged_df <- cinema_train_df[, -which(names(cinema_train_df) %in% c("date", "month", "year"))]
+cinema_train_no_lagged_df <- cinema_train_no_lagged_df[, !startsWith(names(cinema_train_no_lagged_df), "lagged_")]
 # Too difficult to optimize with a lot of variables.
 # Also, date_numeric outperforms month+year.
-egizio_test_no_lagged_df <- egizio_test_df[, -which(names(egizio_test_df) %in% c("date", "month", "year"))]
-egizio_test_no_lagged_df <- egizio_test_no_lagged_df[, !startsWith(names(egizio_test_no_lagged_df), "lagged_")]
+cinema_test_no_lagged_df <- cinema_test_df[, -which(names(cinema_test_df) %in% c("date", "month", "year"))]
+cinema_test_no_lagged_df <- cinema_test_no_lagged_df[, !startsWith(names(cinema_test_no_lagged_df), "lagged_")]
 
 if (run_cross_validation) {
   grid_boosting <- expand.grid(n.trees = c(50, 100, 500, 1000, 5000),
@@ -1429,7 +1358,7 @@ if (run_cross_validation) {
                                  allowParallel = TRUE) # allow parallel processing if available
   
   gbm_grid <- train(visitors ~ .,
-                    data = egizio_train_no_lagged_df,
+                    data = cinema_train_no_lagged_df,
                     method = "gbm",  
                     distribution = "gaussian",
                     trControl = train_controls,
@@ -1442,7 +1371,7 @@ if (run_cross_validation) {
   best_model_boosting <- gbm_grid$bestTune
   
   final_model_boosting <- gbm(visitors ~ .,
-                              data = egizio_train_no_lagged_df,
+                              data = cinema_train_no_lagged_df,
                               distribution = "gaussian",
                               n.trees = best_model_boosting$n.trees,
                               interaction.depth = best_model_boosting$interaction.depth,
@@ -1450,7 +1379,7 @@ if (run_cross_validation) {
                               n.minobsinnode = best_model_boosting$n.minobsinnode)
 } else {
   final_model_boosting <- gbm(visitors ~ .,
-                              data = egizio_train_no_lagged_df,
+                              data = cinema_train_no_lagged_df,
                               distribution = "gaussian",
                               n.trees = 200,
                               interaction.depth = 7,
@@ -1462,20 +1391,20 @@ par(mai=mai.new)
 summary(final_model_boosting, las=1, cBar=20)
 par(mai=mai.old)
 
-egizio_predictions_df$predicted_visitors_boosting <- predict(final_model_boosting,
-                                                             newdata = egizio_test_no_lagged_df,
+cinema_predictions_df$predicted_visitors_boosting <- predict(final_model_boosting,
+                                                             newdata = cinema_test_no_lagged_df,
                                                              n.trees = final_model_boosting$n.trees)
 
-egizio_training_preds <- predict(final_model_boosting,
-                                 newdata = egizio_train_no_lagged_df,
+cinema_training_preds <- predict(final_model_boosting,
+                                 newdata = cinema_train_no_lagged_df,
                                  n.trees = final_model_boosting$n.trees)
 # Calculate metrics
-r_squared <- RSQUARE(egizio_train_df$visitors, egizio_training_preds)
-adj_r_squared <- adjusted_R2(egizio_train_df$visitors, egizio_training_preds, nrow(egizio_train_df), length(final_model_boosting$var.names))
-mse <- mse(egizio_test_df$visitors, egizio_predictions_df$predicted_visitors_boosting)
-rmse <- rmse(egizio_test_df$visitors, egizio_predictions_df$predicted_visitors_boosting)
-mae <- mae(egizio_test_df$visitors, egizio_predictions_df$predicted_visitors_boosting)
-mape <- mape(egizio_test_df$visitors, egizio_predictions_df$predicted_visitors_boosting)
+r_squared <- RSQUARE(cinema_train_df$visitors, cinema_training_preds)
+adj_r_squared <- adjusted_R2(cinema_train_df$visitors, cinema_training_preds, nrow(cinema_train_df), length(final_model_boosting$var.names))
+mse <- mse(cinema_test_df$visitors, cinema_predictions_df$predicted_visitors_boosting)
+rmse <- rmse(cinema_test_df$visitors, cinema_predictions_df$predicted_visitors_boosting)
+mae <- mae(cinema_test_df$visitors, cinema_predictions_df$predicted_visitors_boosting)
+mape <- mape(cinema_test_df$visitors, cinema_predictions_df$predicted_visitors_boosting)
 
 metrics_df <- rbind(metrics_df, list(Model = "Boosting - TSCV",
                                      R2 = r_squared, R2_adj = adj_r_squared,
@@ -1484,11 +1413,11 @@ metrics_df <- rbind(metrics_df, list(Model = "Boosting - TSCV",
 print(metrics_df)
 
 # Plot predictions 
-plot(egizio_test_df$visitors, egizio_predictions_df$predicted_visitors_boosting,
+plot(cinema_test_df$visitors, cinema_predictions_df$predicted_visitors_boosting,
      ylab="Predictions", xlab="True")
 abline(0,1)
 
-ggplot(egizio_predictions_df, aes(x = date)) +
+ggplot(cinema_predictions_df, aes(x = date)) +
   geom_line(aes(y = visitors_true, color = "Visitors"), size = 1) +
   geom_line(aes(y = predicted_visitors_boosting, color = "Predicted"),
             linetype = "dashed", size = 1) +
@@ -1505,17 +1434,16 @@ plot(final_model_boosting, i.var=4, n.trees = final_model_boosting$n.trees, ylab
 plot(final_model_boosting, i.var=5, n.trees = final_model_boosting$n.trees, ylab = "visitors")
 plot(final_model_boosting, i.var=6, n.trees = final_model_boosting$n.trees, ylab = "visitors")
 plot(final_model_boosting, i.var=7, n.trees = final_model_boosting$n.trees, ylab = "visitors")
-plot(final_model_boosting, i.var=8, n.trees = final_model_boosting$n.trees, ylab = "visitors")
 plot(final_model_boosting, i.var=c(2,4), n.trees = final_model_boosting$n.trees)
 
 # --------------------------------------------------------------------- #
 # Model 13 - XGboost with Cross-validation
 
 training.x <- model.matrix(visitors ~ . - date - month - year,
-                           data = egizio_train_df)
+                           data = cinema_train_df)
 training.x <- training.x[, !startsWith(colnames(training.x), "lagged_")]
 testing.x <- model.matrix(visitors ~ . - date - month - year,
-                          data = egizio_test_df)
+                          data = cinema_test_df)
 testing.x <- testing.x[, !startsWith(colnames(testing.x), "lagged_")]
 
 # The following cross validation has been performed.
@@ -1546,7 +1474,7 @@ if (run_cross_validation) {
   # gamma = 0.1, colsample_bytree = 0.8, min_child_weight = 5 and subsample = 0.8.
   
   xgb_model <- train(x = data.matrix(training.x[, -1]), # Ignore intercept
-                     y = as.numeric(as.character(egizio_train_df$visitors)),
+                     y = as.numeric(as.character(cinema_train_df$visitors)),
                      method = "xgbTree", # XGBoost
                      trControl = train_controls,
                      tuneGrid = xgboost_grid,
@@ -1560,7 +1488,7 @@ if (run_cross_validation) {
   print(best_model_xgb)
   
   final_model_xgb <- xgboost(data=data.matrix(training.x[,-1]),
-                             label=egizio_train_df$visitors,
+                             label=cinema_train_df$visitors,
                              eta=best_model_xgb$eta,
                              max_depth=best_model_xgb$max_depth,
                              nrounds=best_model_xgb$nrounds,
@@ -1573,7 +1501,7 @@ if (run_cross_validation) {
   
 } else {
   final_model_xgb <- xgboost(data=data.matrix(training.x[,-1]), # ignore intercept
-                             label=as.numeric(as.character(egizio_train_df$visitors)),
+                             label=as.numeric(as.character(cinema_train_df$visitors)),
                              eta=0.025, # default=0.3 - takes values in (0-1]
                              max_depth=6, # default=6 - takes values in (0,Inf), larger value => more complex => overfitting
                              nrounds=500, # default=100 - controls number of iterations (number of trees)
@@ -1588,19 +1516,19 @@ print(importance_scores)
 xgb.plot.importance(importance_matrix = importance_scores)
 
 # Perform predictions on the test set
-egizio_predictions_df$predicted_visitors_xgboost_tscv <- predict(final_model_xgb,
+cinema_predictions_df$predicted_visitors_xgboost_tscv <- predict(final_model_xgb,
                                                                  newdata = data.matrix(testing.x[, -1]))
 
 # Calculate metrics for XGBoost
-egizio_training_xgboost_preds <- predict(final_model_xgb,
+cinema_training_xgboost_preds <- predict(final_model_xgb,
                                          newdata = data.matrix(training.x[, -1]))
 # Calculate metrics
-r_squared <- RSQUARE(egizio_train_df$visitors, egizio_training_xgboost_preds)
-adj_r_squared <- adjusted_R2(egizio_train_df$visitors, egizio_training_xgboost_preds, nrow(egizio_train_df), final_model_xgb$nfeatures)
-mse <- mse(egizio_test_df$visitors, egizio_predictions_df$predicted_visitors_xgboost_tscv)
-rmse <- rmse(egizio_test_df$visitors, egizio_predictions_df$predicted_visitors_xgboost_tscv)
-mae <- mae(egizio_test_df$visitors, egizio_predictions_df$predicted_visitors_xgboost_tscv)
-mape <- mape(egizio_test_df$visitors, egizio_predictions_df$predicted_visitors_xgboost_tscv)
+r_squared <- RSQUARE(cinema_train_df$visitors, cinema_training_xgboost_preds)
+adj_r_squared <- adjusted_R2(cinema_train_df$visitors, cinema_training_xgboost_preds, nrow(cinema_train_df), final_model_xgb$nfeatures)
+mse <- mse(cinema_test_df$visitors, cinema_predictions_df$predicted_visitors_xgboost_tscv)
+rmse <- rmse(cinema_test_df$visitors, cinema_predictions_df$predicted_visitors_xgboost_tscv)
+mae <- mae(cinema_test_df$visitors, cinema_predictions_df$predicted_visitors_xgboost_tscv)
+mape <- mape(cinema_test_df$visitors, cinema_predictions_df$predicted_visitors_xgboost_tscv)
 
 # Update metrics_df with XGBoost metrics
 metrics_df <- rbind(metrics_df, list(Model = "XGBoost - TSCV",
@@ -1611,11 +1539,11 @@ metrics_df <- rbind(metrics_df, list(Model = "XGBoost - TSCV",
 print(metrics_df)
 
 # Plot predictions 
-plot(egizio_test_df$visitors, egizio_predictions_df$predicted_visitors_xgboost_tscv,
+plot(cinema_test_df$visitors, cinema_predictions_df$predicted_visitors_xgboost_tscv,
      ylab="Predictions", xlab="True")
 abline(0,1)
 
-ggplot(egizio_predictions_df, aes(x = date)) +
+ggplot(cinema_predictions_df, aes(x = date)) +
   geom_line(aes(y = visitors_true, color = "Visitors"), size = 1) +
   geom_line(aes(y = predicted_visitors_xgboost_tscv, color = "Predicted"),
             linetype = "dashed", size = 1) +
@@ -1636,21 +1564,21 @@ arima_res_gbm <- Arima(res_gbm, xreg = regressors_train,
                        order = c(1,0,12), seasonal = c(0,1,1), include.drift = TRUE)
 summary(arima_res_gbm)
 
-ggplot(data = egizio_train_df, aes(x = date, y = res_gbm)) +
+ggplot(data = cinema_train_df, aes(x = date, y = res_gbm)) +
   geom_point(color = "black") +
   geom_line(aes(y = arima_res_gbm$fitted), color = "red") +
   xlab("Date") +
   ylab("Residuals") +
   ggtitle("Real residuals vs. Fitted values with ARMAX")
 
-ggplot(data = egizio_train_df, aes(x = date, y = as.numeric(arima_res_gbm$residuals))) +
+ggplot(data = cinema_train_df, aes(x = date, y = as.numeric(arima_res_gbm$residuals))) +
   geom_point(color = "blue") + xlab("Date") + ylab("Residuals") +
   ggtitle("Residuals Plot of ARMAX Model for Residuals")
 
 vis_fitted_gbm <- make.instantaneous(best_gbm$fitted) + arima_res_gbm$fitted
-vis_fitted_gbm <- (vis_fitted_gbm - mean(egizio_train_df_copy$visitors)) / sd(egizio_train_df_copy$visitors)
+vis_fitted_gbm <- (vis_fitted_gbm - mean(cinema_train_df_copy$visitors)) / sd(cinema_train_df_copy$visitors)
 
-ggplot(data = egizio_train_df, aes(x = date, y = visitors)) +
+ggplot(data = cinema_train_df, aes(x = date, y = visitors)) +
   geom_point(color = "black") +
   geom_line(aes(y = vis_fitted_gbm), color = "red") +
   xlab("Date") +
@@ -1661,35 +1589,35 @@ ggplot(data = egizio_train_df, aes(x = date, y = visitors)) +
 # --------------------------------------------------------------------- #
 # Model 15 - Decomposition: GBM + TSLM + Boosting
 
-egizio_visitors_unstandardized_train_ts <- ts(egizio_train_df_copy$visitors, frequency = 12)
-egizio_visitors_comp <- decompose(egizio_visitors_unstandardized_train_ts)
-plot(egizio_visitors_comp)
+cinema_visitors_unstandardized_train_ts <- ts(cinema_train_df_copy$visitors, frequency = 12)
+cinema_visitors_comp <- decompose(cinema_visitors_unstandardized_train_ts)
+plot(cinema_visitors_comp)
 
-visitorSeasonAdj <- egizio_visitors_unstandardized_train_ts - egizio_visitors_comp$seasonal
+visitorSeasonAdj <- cinema_visitors_unstandardized_train_ts - cinema_visitors_comp$seasonal
 plot.ts(visitorSeasonAdj)
 # We obtain just the trend + random components
 
 # For modelling the trend we will use the best GBM from above.
 
-# We will use the egizio_train_unstandardized_df$visitors directly.
+# We will use the cinema_train_unstandardized_df$visitors directly.
 # To begin with, we just focus our attention to model the general trend.
 
 # 1. Modelling the trend
-plot.ts(egizio_visitors_comp$trend, ylab="Trend")
+plot.ts(cinema_visitors_comp$trend, ylab="Trend")
 
 # Let's try with GBM
 # The best candidates were: exp + rectangular and two rectangular.
 # Decided to proceed with two rectangular shocks.
 res_gbm <- make.instantaneous(best_gbm$residuals)
 plot.ts(res_gbm) # Residuals when fitting a trend
-lines(as.numeric(egizio_visitors_unstandardized_train_ts - egizio_visitors_comp$trend), col=2)
+lines(as.numeric(cinema_visitors_unstandardized_train_ts - cinema_visitors_comp$trend), col=2)
 
 pred_gbm_visitors <- predict(best_gbm, newx = 1:216)
 pred_inst_gbm_visitors <- make.instantaneous(pred_gbm_visitors)
 plot.ts(pred_inst_gbm_visitors[1:204])
-lines(as.numeric(egizio_visitors_comp$trend), col=2)
+lines(as.numeric(cinema_visitors_comp$trend), col=2)
 
-plot.ts(pred_inst_gbm_visitors[1:204] - as.numeric(egizio_visitors_comp$trend))
+plot.ts(pred_inst_gbm_visitors[1:204] - as.numeric(cinema_visitors_comp$trend))
 # Mostly the outliers are left and noise.
 
 # 2. Model the seasonality
@@ -1697,7 +1625,7 @@ res_gbm_ts <- ts(res_gbm, frequency = 12)
 tslm_res_gbm <- tslm(res_gbm_ts ~ season)
 summary(tslm_res_gbm)
 
-ggplot(egizio_train_unstandardized_df, aes(x = date)) +
+ggplot(cinema_train_unstandardized_df, aes(x = date)) +
   geom_line(aes(y = visitors, color = "Visitors"), size = 1) +
   geom_line(aes(y = tslm_res_gbm$fitted.values + pred_inst_gbm_visitors[1:204], 
                 color = "Predicted"), linetype = "dashed", size = 1) +
@@ -1709,7 +1637,7 @@ ggplot(egizio_train_unstandardized_df, aes(x = date)) +
 res_res <- tslm_res_gbm$residuals
 
 # Standardization is not necessary
-egizio_train_unstandardized_df$res <- as.numeric(res_res)
+cinema_train_unstandardized_df$res <- as.numeric(res_res)
 
 run_cross_validation <- FALSE
 
@@ -1727,7 +1655,7 @@ if (run_cross_validation) {
                                  allowParallel = TRUE)
   
   gbm_grid_res <- train(res ~ . - date - date_numeric - visitors, # now we model the residuals using the other variables
-                        data = egizio_train_unstandardized_df,
+                        data = cinema_train_unstandardized_df,
                         method = "gbm",  
                         distribution = "gaussian",
                         trControl = train_controls,
@@ -1740,7 +1668,7 @@ if (run_cross_validation) {
   best_model_boosting_res <- gbm_grid_res$bestTune
   
   final_model_boosting_res <- gbm(res ~ . - date - date_numeric - visitors,
-                                  data = egizio_train_unstandardized_df,
+                                  data = cinema_train_unstandardized_df,
                                   distribution = "gaussian",
                                   n.trees = best_model_boosting_res$n.trees,
                                   interaction.depth = best_model_boosting_res$interaction.depth,
@@ -1748,7 +1676,7 @@ if (run_cross_validation) {
                                   n.minobsinnode = best_model_boosting_res$n.minobsinnode)
 } else {
   final_model_boosting_res <- gbm(res ~ . - date - date_numeric - visitors,
-                                  data = egizio_train_unstandardized_df,
+                                  data = cinema_train_unstandardized_df,
                                   distribution = "gaussian",
                                   n.trees = 50,
                                   interaction.depth = 8,
@@ -1760,30 +1688,30 @@ par(mai=mai.new)
 summary(final_model_boosting_res, las=1, cBar=20)
 par(mai=mai.old)
 
-plot.ts(egizio_train_unstandardized_df$res)
+plot.ts(cinema_train_unstandardized_df$res)
 lines(final_model_boosting_res$fit, col=2)
 # We can see that the model doesn't overfit, which is good.
 # But there is still some variability to be explained, due to outliers.
 
-residuals <- egizio_train_unstandardized_df$visitors - final_model_boosting_res$fit
+residuals <- cinema_train_unstandardized_df$visitors - final_model_boosting_res$fit
 checkresiduals(remainder(decompose(ts(residuals, frequency = 12))))
 
 # Can we use this model for forecasting? Yes.
 trend_predictions <- pred_inst_gbm_visitors[205:216]
 seasonality_prediction <- forecast(tslm_res_gbm, h=12)$mean
 residual_predictions <- predict(final_model_boosting_res,
-                                newdata=egizio_test_df_copy, # unstandardized
+                                newdata=cinema_test_df_copy, # unstandardized
                                 n.trees=final_model_boosting_res$n.trees)
 final_predictions <- trend_predictions + seasonality_prediction + residual_predictions
 
 # Calculate metrics
-egizio_predictions_df$predicted_visitors_decomposed <- as.numeric(final_predictions)
-egizio_predictions_df$predicted_visitors_decomposed <- (egizio_predictions_df$predicted_visitors_decomposed - mean(egizio_train_unstandardized_df$visitors)) / sd(egizio_train_unstandardized_df$visitors)
+cinema_predictions_df$predicted_visitors_decomposed <- as.numeric(final_predictions)
+cinema_predictions_df$predicted_visitors_decomposed <- (cinema_predictions_df$predicted_visitors_decomposed - mean(cinema_train_unstandardized_df$visitors)) / sd(cinema_train_unstandardized_df$visitors)
 
-mse <- mse(egizio_test_df$visitors, egizio_predictions_df$predicted_visitors_decomposed)
-rmse <- rmse(egizio_test_df$visitors, egizio_predictions_df$predicted_visitors_decomposed)
-mae <- mae(egizio_test_df$visitors, egizio_predictions_df$predicted_visitors_decomposed)
-mape <- mape(egizio_test_df$visitors, egizio_predictions_df$predicted_visitors_decomposed)
+mse <- mse(cinema_test_df$visitors, cinema_predictions_df$predicted_visitors_decomposed)
+rmse <- rmse(cinema_test_df$visitors, cinema_predictions_df$predicted_visitors_decomposed)
+mae <- mae(cinema_test_df$visitors, cinema_predictions_df$predicted_visitors_decomposed)
+mape <- mape(cinema_test_df$visitors, cinema_predictions_df$predicted_visitors_decomposed)
 
 metrics_df <- rbind(metrics_df, list(Model = "Decomposed: GBM+TLSM+Boosting",
                                      R2 = NA, R2_adj = NA,
@@ -1791,7 +1719,7 @@ metrics_df <- rbind(metrics_df, list(Model = "Decomposed: GBM+TLSM+Boosting",
                                      MAPE = mape, AIC = NA))
 print(metrics_df)
 
-ggplot(egizio_predictions_df, aes(x = date)) +
+ggplot(cinema_predictions_df, aes(x = date)) +
   geom_line(aes(y = visitors_true, color = "Visitors"), linewidth = 1) +
   geom_line(aes(y = predicted_visitors_decomposed, color = "Predicted"),
             linetype = "dashed", linewidth = 1) +
@@ -1813,18 +1741,18 @@ print(head(sorted_metrics_df, 5))
 
 # Error analysis: # ToDo: Replace predicted_visitors_sarima with the best model column.
 best_model <- "SARIMA - Improved"
-sorted_egizio_predictions_df <- egizio_predictions_df[,c("visitors_true", "predicted_visitors_sarima")]
+sorted_cinema_predictions_df <- cinema_predictions_df[,c("visitors_true", "predicted_visitors_sarima")]
 
 # Unstandardize
-sorted_egizio_predictions_df$visitors_true <- (sorted_egizio_predictions_df$visitors_true * sd(egizio_train_unstandardized_df$visitors)) + mean(egizio_train_unstandardized_df$visitors)
-sorted_egizio_predictions_df$predicted_visitors_sarima <- (sorted_egizio_predictions_df$predicted_visitors_sarima * sd(egizio_train_unstandardized_df$visitors)) + mean(egizio_train_unstandardized_df$visitors)
+sorted_cinema_predictions_df$visitors_true <- (sorted_cinema_predictions_df$visitors_true * sd(cinema_train_unstandardized_df$visitors)) + mean(cinema_train_unstandardized_df$visitors)
+sorted_cinema_predictions_df$predicted_visitors_sarima <- (sorted_cinema_predictions_df$predicted_visitors_sarima * sd(cinema_train_unstandardized_df$visitors)) + mean(cinema_train_unstandardized_df$visitors)
 
-sorted_egizio_predictions_df$error <- abs(sorted_egizio_predictions_df$visitors_true - sorted_egizio_predictions_df$predicted_visitors_sarima)
-sorted_egizio_predictions_df$error_percentage <- (sorted_egizio_predictions_df$error / sorted_egizio_predictions_df$visitors_true) * 100
-sorted_egizio_predictions_df$error_percentage <- round(sorted_egizio_predictions_df$error_percentage, 2)
-sorted_egizio_predictions_df <- sorted_egizio_predictions_df[order(sorted_egizio_predictions_df$error_percentage), ]
+sorted_cinema_predictions_df$error <- abs(sorted_cinema_predictions_df$visitors_true - sorted_cinema_predictions_df$predicted_visitors_sarima)
+sorted_cinema_predictions_df$error_percentage <- (sorted_cinema_predictions_df$error / sorted_cinema_predictions_df$visitors_true) * 100
+sorted_cinema_predictions_df$error_percentage <- round(sorted_cinema_predictions_df$error_percentage, 2)
+sorted_cinema_predictions_df <- sorted_cinema_predictions_df[order(sorted_cinema_predictions_df$error_percentage), ]
 
-colnames(sorted_egizio_predictions_df) <- c("Visitors", "Predicted", "Error", "Error (%)")
+colnames(sorted_cinema_predictions_df) <- c("Visitors", "Predicted", "Error", "Error (%)")
 # Total Error (%) for SARIMA: 155.15
 # Total Error (%) for Holt-Winters: 154.63
 # Worst predictions for Holt-Winters: 19.81, 25.63, 33.10
@@ -1832,12 +1760,12 @@ colnames(sorted_egizio_predictions_df) <- c("Visitors", "Predicted", "Error", "E
 # A better model here is SARIMA.
 
 # Print the best 3 predictions
-best_3_predictions <- head(sorted_egizio_predictions_df, 3)
+best_3_predictions <- head(sorted_cinema_predictions_df, 3)
 cat("Best 3 predictions (True vs Predicted value):\n")
 print(best_3_predictions[, c(-3)])
 
 # Print the worst 3 predictions
-worst_3_predictions <- tail(sorted_egizio_predictions_df, 3)
+worst_3_predictions <- tail(sorted_cinema_predictions_df, 3)
 cat("Worst 3 predictions (True vs Predicted value):\n")
 print(worst_3_predictions[, c(-3)])
 
@@ -1874,13 +1802,13 @@ covid_metrics_df <- rbind(covid_metrics_df, best_model_row)
 print(covid_metrics_df)
 
 # To create a new artificial dataset, we first drop the COVID months.
-egizio_train_no_covid_ds <- egizio_train_df[1:182,]
+cinema_train_no_covid_ds <- cinema_train_df[1:182,]
 
 # Find a good model to predict the COVID months
-egizio_train_no_covid_visitors_ts <- ts(egizio_train_no_covid_ds$visitors, frequency = 12)
+cinema_train_no_covid_visitors_ts <- ts(cinema_train_no_covid_ds$visitors, frequency = 12)
 # Different models were tried (shown below).
 # The best model was the following:
-sarima_no_covid <- Arima(egizio_train_no_covid_visitors_ts, order = c(1,0,12),
+sarima_no_covid <- Arima(cinema_train_no_covid_visitors_ts, order = c(1,0,12),
                          seasonal = c(0,1,2), include.drift=TRUE)
 summary(sarima_no_covid) # AIC=210.52, RMSE=0.3710264
 train_predictions_sarima_no_covid <- fitted(sarima_no_covid)
@@ -1888,26 +1816,26 @@ train_predictions_sarima_no_covid <- fitted(sarima_no_covid)
 # The following model seems to work better, but it's wrong.
 # If we include the regressors, they also contain COVID data, so the end of
 # our series will be underestimated, i.e., it will look similar to COVID.
-sarimax_no_covid <- Arima(egizio_train_no_covid_visitors_ts, order = c(1,0,12),
+sarimax_no_covid <- Arima(cinema_train_no_covid_visitors_ts, order = c(1,0,12),
                           seasonal = c(0,1,2), include.drift=TRUE,
                           xreg=regressors_train[1:182,])
 summary(sarimax_no_covid) # AIC=125.18, RMSE=0.2856033
 train_predictions_sarimax_no_covid <- fitted(sarimax_no_covid)
 
 # Visualize the predictions for the COVID months:
-plot.ts(egizio_train_no_covid_visitors_ts)
+plot.ts(cinema_train_no_covid_visitors_ts)
 lines(train_predictions_sarima_no_covid,col=2)
 lines(train_predictions_sarimax_no_covid, col=3) # this one is much better -> but it's wrong!
 
 # We proceed with model: sarima_no_covid.
 
 # Calculate metrics
-train_r_squared <- RSQUARE(egizio_train_no_covid_visitors_ts, train_predictions_sarima_no_covid)
-train_adj_r_squared <- adjusted_R2(egizio_train_no_covid_visitors_ts, train_predictions_sarima_no_covid, length(egizio_train_no_covid_visitors_ts), length(coef(sarima_no_covid)))
-train_mse <- mse(egizio_train_no_covid_visitors_ts, train_predictions_sarima_no_covid)
-train_rmse <- rmse(egizio_train_no_covid_visitors_ts, train_predictions_sarima_no_covid)
-train_mae <- mae(egizio_train_no_covid_visitors_ts, train_predictions_sarima_no_covid)
-train_mape <- mape(egizio_train_no_covid_visitors_ts, train_predictions_sarima_no_covid)
+train_r_squared <- RSQUARE(cinema_train_no_covid_visitors_ts, train_predictions_sarima_no_covid)
+train_adj_r_squared <- adjusted_R2(cinema_train_no_covid_visitors_ts, train_predictions_sarima_no_covid, length(cinema_train_no_covid_visitors_ts), length(coef(sarima_no_covid)))
+train_mse <- mse(cinema_train_no_covid_visitors_ts, train_predictions_sarima_no_covid)
+train_rmse <- rmse(cinema_train_no_covid_visitors_ts, train_predictions_sarima_no_covid)
+train_mae <- mae(cinema_train_no_covid_visitors_ts, train_predictions_sarima_no_covid)
+train_mape <- mape(cinema_train_no_covid_visitors_ts, train_predictions_sarima_no_covid)
 train_aic <- AIC(sarima_no_covid)
 cat(train_r_squared, train_adj_r_squared, train_mse, train_rmse, train_mae, train_mape, train_aic)
 # The following models were tried:
@@ -1929,52 +1857,52 @@ cat(train_r_squared, train_adj_r_squared, train_mse, train_rmse, train_mae, trai
 predicted_visitors_sarima_no_covid <- forecast(sarima_no_covid, h=22)
 plot(predicted_visitors_sarima_no_covid)
 
-egizio_train_visitors_covid_replaced <- egizio_train_df
-egizio_train_visitors_covid_replaced$visitors[183:nrow(egizio_train_df)] <- predicted_visitors_sarima_no_covid$mean
+cinema_train_visitors_covid_replaced <- cinema_train_df
+cinema_train_visitors_covid_replaced$visitors[183:nrow(cinema_train_df)] <- predicted_visitors_sarima_no_covid$mean
 
-plot(egizio_train_visitors_covid_replaced$date,
-     egizio_train_visitors_covid_replaced$visitors,
+plot(cinema_train_visitors_covid_replaced$date,
+     cinema_train_visitors_covid_replaced$visitors,
      type='l', xlab="Date", ylab="Visitors",
      main="Visitors with interpolation for COVID months")
-lines(egizio_train_df$date[182:204], egizio_train_df$visitors[182:204], col="red")
+lines(cinema_train_df$date[182:204], cinema_train_df$visitors[182:204], col="red")
 
 
 # Refit the same model from above (used for training) on the whole
-# new artificial training time series egizio_train_visitors_covid_replaced:
-egizio_train_visitors_covid_replaced_ts <- ts(egizio_train_visitors_covid_replaced$visitors, frequency=12)
+# new artificial training time series cinema_train_visitors_covid_replaced:
+cinema_train_visitors_covid_replaced_ts <- ts(cinema_train_visitors_covid_replaced$visitors, frequency=12)
 
-# sarima_covid_replaced <- Arima(egizio_train_visitors_covid_replaced_ts, order = c(1,0,12),
+# sarima_covid_replaced <- Arima(cinema_train_visitors_covid_replaced_ts, order = c(1,0,12),
 #                                seasonal = c(0,1,2), include.drift=TRUE)
-sarima_covid_replaced <- auto.arima(egizio_train_visitors_covid_replaced_ts)
+sarima_covid_replaced <- auto.arima(cinema_train_visitors_covid_replaced_ts)
 
 summary(sarima_covid_replaced)
 
-egizio_train_visitors_covid_replaced$visitors_predictions <- fitted(sarima_covid_replaced)
+cinema_train_visitors_covid_replaced$visitors_predictions <- fitted(sarima_covid_replaced)
 
 # Visualize how it fits the new training data:
-ggplot(data = egizio_train_visitors_covid_replaced, aes(x = date, y = visitors)) +
+ggplot(data = cinema_train_visitors_covid_replaced, aes(x = date, y = visitors)) +
   geom_line(color = "blue") +  
   geom_line(aes(y = visitors_predictions), color = "red", linetype = "twodash") +
   labs(title = "True vs Fitted values by SARIMA")
 
 # Visualize the residuals:
 ggplot(aes(date, y = as.numeric(residuals(sarima_covid_replaced))),
-       data = egizio_train_visitors_covid_replaced) +
+       data = cinema_train_visitors_covid_replaced) +
   geom_point(color = "blue") + xlab("Date") + ylab("Residuals") + ggtitle("Residuals of SARIMA")
 
 checkresiduals(sarima_covid_replaced)
 
 # Finally, let's use it for forecasting:
 pred_sarima_covid_replaced <- forecast(sarima_covid_replaced, h = 12)
-egizio_predictions_df$predicted_visitors_sarima_covid_replaced_forecast <- pred_sarima_covid_replaced$mean
+cinema_predictions_df$predicted_visitors_sarima_covid_replaced_forecast <- pred_sarima_covid_replaced$mean
 
 # Calculate metrics on the test set (2022):
-r_squared <- RSQUARE(egizio_train_visitors_covid_replaced$visitors, egizio_train_visitors_covid_replaced$visitors_predictions)
-adj_r_squared <- adjusted_R2(egizio_train_visitors_covid_replaced$visitors, egizio_train_visitors_covid_replaced$visitors_predictions, length(egizio_train_visitors_covid_replaced$visitors), length(coef(sarima_covid_replaced)))
-mse <- mse(egizio_test_df$visitors, egizio_predictions_df$predicted_visitors_sarima_covid_replaced_forecast)
-rmse <- rmse(egizio_test_df$visitors, egizio_predictions_df$predicted_visitors_sarima_covid_replaced_forecast)
-mae <- mae(egizio_test_df$visitors, egizio_predictions_df$predicted_visitors_sarima_covid_replaced_forecast)
-mape <- mape(egizio_test_df$visitors, egizio_predictions_df$predicted_visitors_sarima_covid_replaced_forecast)
+r_squared <- RSQUARE(cinema_train_visitors_covid_replaced$visitors, cinema_train_visitors_covid_replaced$visitors_predictions)
+adj_r_squared <- adjusted_R2(cinema_train_visitors_covid_replaced$visitors, cinema_train_visitors_covid_replaced$visitors_predictions, length(cinema_train_visitors_covid_replaced$visitors), length(coef(sarima_covid_replaced)))
+mse <- mse(cinema_test_df$visitors, cinema_predictions_df$predicted_visitors_sarima_covid_replaced_forecast)
+rmse <- rmse(cinema_test_df$visitors, cinema_predictions_df$predicted_visitors_sarima_covid_replaced_forecast)
+mae <- mae(cinema_test_df$visitors, cinema_predictions_df$predicted_visitors_sarima_covid_replaced_forecast)
+mape <- mape(cinema_test_df$visitors, cinema_predictions_df$predicted_visitors_sarima_covid_replaced_forecast)
 aic <- AIC(sarima_covid_replaced)
 
 covid_metrics_df <- rbind(covid_metrics_df, list(Model = "COVID interpolated with forecasting",
@@ -1983,7 +1911,7 @@ covid_metrics_df <- rbind(covid_metrics_df, list(Model = "COVID interpolated wit
                                                  MAPE = mape, AIC = aic))
 print(covid_metrics_df)
 
-ggplot(egizio_predictions_df, aes(x = date)) +
+ggplot(cinema_predictions_df, aes(x = date)) +
   geom_line(aes(y = visitors_true, color = "True"), linewidth = 1) +
   geom_line(aes(y = predicted_visitors_sarima, color = "Original predictions"),
             linetype = "dashed", linewidth = 1) +
@@ -2007,61 +1935,61 @@ ggplot(egizio_predictions_df, aes(x = date)) +
 # Interpolation of COVID months using the mean of the 
 # corresponding month of the pre-COVID training dataset.
 
-egizio_train_covid_interpolated_mean_ds <- egizio_train_df[1:180, c("date", "visitors")]
+cinema_train_covid_interpolated_mean_ds <- cinema_train_df[1:180, c("date", "visitors")]
 
 # Calculate mean values for each month
 monthly_means <- sapply(1:12, function(month) {
-  mean(egizio_train_covid_interpolated_mean_ds[seq(month, nrow(egizio_train_covid_interpolated_mean_ds), by = 12), ]$visitors)
+  mean(cinema_train_covid_interpolated_mean_ds[seq(month, nrow(cinema_train_covid_interpolated_mean_ds), by = 12), ]$visitors)
 })
 
-# Add mean values to egizio_train_covid_interpolated_mean_ds
+# Add mean values to cinema_train_covid_interpolated_mean_ds
 month_idx <- 1
 for (i in seq(181, 204)) {
   visitors_i <- monthly_means[month_idx]
-  last_date <- tail(egizio_train_covid_interpolated_mean_ds$date, 1)
+  last_date <- tail(cinema_train_covid_interpolated_mean_ds$date, 1)
   date_i <- last_date %m+% months(1)
   new_row <- data.frame(date=date_i, visitors=visitors_i)
-  egizio_train_covid_interpolated_mean_ds <- rbind(egizio_train_covid_interpolated_mean_ds, new_row)
+  cinema_train_covid_interpolated_mean_ds <- rbind(cinema_train_covid_interpolated_mean_ds, new_row)
   month_idx <- month_idx + 1
   if (month_idx == 13) {
     month_idx <- 1
   }
 }
 
-plot.ts(egizio_train_covid_interpolated_mean_ds$visitors, ylab="Visitors")
+plot.ts(cinema_train_covid_interpolated_mean_ds$visitors, ylab="Visitors")
 
-# Fit on the whole new artificial training time series egizio_train_visitors_covid_replaced:
-egizio_train_visitors_covid_interpolated_mean_ts <- ts(egizio_train_covid_interpolated_mean_ds$visitors, frequency=12)
+# Fit on the whole new artificial training time series cinema_train_visitors_covid_replaced:
+cinema_train_visitors_covid_interpolated_mean_ts <- ts(cinema_train_covid_interpolated_mean_ds$visitors, frequency=12)
 
-sarima_covid_replaced_mean <- auto.arima(egizio_train_visitors_covid_interpolated_mean_ts)
+sarima_covid_replaced_mean <- auto.arima(cinema_train_visitors_covid_interpolated_mean_ts)
 summary(sarima_covid_replaced_mean)
 
-egizio_train_visitors_covid_replaced$visitors_predictions <- fitted(sarima_covid_replaced_mean)
+cinema_train_visitors_covid_replaced$visitors_predictions <- fitted(sarima_covid_replaced_mean)
 
 # Visualize how it fits the new training data:
-ggplot(data = egizio_train_visitors_covid_replaced, aes(x = date, y = visitors)) +
+ggplot(data = cinema_train_visitors_covid_replaced, aes(x = date, y = visitors)) +
   geom_line(color = "blue") +  
   geom_line(aes(y = visitors_predictions), color = "red", linetype = "twodash") +
   labs(title = "True vs Fitted values by SARIMA")
 
 # Visualize the residuals:
 ggplot(aes(date, y = as.numeric(residuals(sarima_covid_replaced_mean))),
-       data = egizio_train_visitors_covid_replaced) +
+       data = cinema_train_visitors_covid_replaced) +
   geom_point(color = "blue") + xlab("Date") + ylab("Residuals") + ggtitle("Residuals of SARIMA")
 
 checkresiduals(sarima_covid_replaced_mean)
 
 # Finally, let's use it for forecasting:
 pred_sarima_covid_replaced_mean <- forecast(sarima_covid_replaced_mean, h = 12)
-egizio_predictions_df$predicted_visitors_sarima_covid_replaced_mean <- pred_sarima_covid_replaced_mean$mean
+cinema_predictions_df$predicted_visitors_sarima_covid_replaced_mean <- pred_sarima_covid_replaced_mean$mean
 
 # Calculate metrics on the test set (2022):
-r_squared <- RSQUARE(egizio_train_visitors_covid_replaced$visitors, egizio_train_visitors_covid_replaced$visitors_predictions)
-adj_r_squared <- adjusted_R2(egizio_train_visitors_covid_replaced$visitors, egizio_train_visitors_covid_replaced$visitors_predictions, length(egizio_train_visitors_covid_replaced$visitors), length(coef(sarima_covid_replaced_mean)))
-mse <- mse(egizio_test_df$visitors, egizio_predictions_df$predicted_visitors_sarima_covid_replaced_mean)
-rmse <- rmse(egizio_test_df$visitors, egizio_predictions_df$predicted_visitors_sarima_covid_replaced_mean)
-mae <- mae(egizio_test_df$visitors, egizio_predictions_df$predicted_visitors_sarima_covid_replaced_mean)
-mape <- mape(egizio_test_df$visitors, egizio_predictions_df$predicted_visitors_sarima_covid_replaced_mean)
+r_squared <- RSQUARE(cinema_train_visitors_covid_replaced$visitors, cinema_train_visitors_covid_replaced$visitors_predictions)
+adj_r_squared <- adjusted_R2(cinema_train_visitors_covid_replaced$visitors, cinema_train_visitors_covid_replaced$visitors_predictions, length(cinema_train_visitors_covid_replaced$visitors), length(coef(sarima_covid_replaced_mean)))
+mse <- mse(cinema_test_df$visitors, cinema_predictions_df$predicted_visitors_sarima_covid_replaced_mean)
+rmse <- rmse(cinema_test_df$visitors, cinema_predictions_df$predicted_visitors_sarima_covid_replaced_mean)
+mae <- mae(cinema_test_df$visitors, cinema_predictions_df$predicted_visitors_sarima_covid_replaced_mean)
+mape <- mape(cinema_test_df$visitors, cinema_predictions_df$predicted_visitors_sarima_covid_replaced_mean)
 aic <- AIC(sarima_covid_replaced_mean)
 
 covid_metrics_df <- rbind(covid_metrics_df, list(Model = "COVID interpolated - mean",
@@ -2070,7 +1998,7 @@ covid_metrics_df <- rbind(covid_metrics_df, list(Model = "COVID interpolated - m
                                                  MAPE = mape, AIC = aic))
 print(covid_metrics_df)
 
-ggplot(egizio_predictions_df, aes(x = date)) +
+ggplot(cinema_predictions_df, aes(x = date)) +
   geom_line(aes(y = visitors_true, color = "True"), linewidth = 1) +
   geom_line(aes(y = predicted_visitors_sarima, color = "Original predictions"),
             linetype = "dashed", linewidth = 1) +
@@ -2084,7 +2012,7 @@ ggplot(egizio_predictions_df, aes(x = date)) +
                                 "COVID Interpolated predictions" = "blue"))
 
 # Compare all predictions:
-ggplot(egizio_predictions_df, aes(x = date)) +
+ggplot(cinema_predictions_df, aes(x = date)) +
   geom_line(aes(y = visitors_true, color = "True"), linewidth = 1) +
   geom_line(aes(y = predicted_visitors_sarima, color = "No interpolation"),
             linetype = "dashed", linewidth = 1) +
@@ -2099,3 +2027,4 @@ ggplot(egizio_predictions_df, aes(x = date)) +
                                 "No interpolation" = "green",
                                 "COVID Interpolated Mean" = "blue",
                                 "COVID Interpolated Forecast" = "purple"))
+
