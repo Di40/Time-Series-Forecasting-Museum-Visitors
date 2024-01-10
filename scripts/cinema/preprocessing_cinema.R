@@ -120,10 +120,15 @@ print(colSums(is.na(italy_holidays_df)))
 
 # ---------------------------------------------------------------------------- #
 # Read Turin arrivals data 
+
 turin_arrivals_df <- read.csv("../../data/turin_arrivals.csv")
 str(turin_arrivals_df)
 
-turin_arrivals_df$date <- as.Date(turin_arrivals_df$date, format = "%m/%d/%Y")
+turin_arrivals_df$date <- as.Date(as.yearmon(paste(turin_arrivals_df$year,
+                                                   turin_arrivals_df$month,
+                                                   sep = "-")))
+
+turin_arrivals_df <- turin_arrivals_df[, c('date', 'arrivals')]
 
 str(turin_arrivals_df)
 
@@ -260,9 +265,9 @@ abs_acf_values_arrivals <- abs(ccf_arrivals$acf)[1:12]
 top_lags_arrivals <- order(abs_acf_values_arrivals, decreasing = TRUE)[1:3]
 top_lags_arrivals <- top_lags_arrivals - LAG_MAX - 1
 print(top_lags_arrivals)
-# -6 -12  -1
+# -1 -2 -6
 # We have maximum correlation at:
-# visitors[t] ~ arrivals[t-6]
+# visitors[t] ~ arrivals[t-1]
 
 # Create lagged arrivals
 lag_arrivals <- abs(top_lags_arrivals[1])
