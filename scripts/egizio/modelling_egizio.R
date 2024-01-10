@@ -144,8 +144,8 @@ ggplot() +
 
 # Show them on separate plots
 plot_visitors <- ggplot() +
-  geom_line(data = egizio_train_df, aes(x = date, y = visitors, color = "Train - Visitors", linetype = "Train"), size = 1) +
-  geom_line(data = egizio_test_df, aes(x = date, y = visitors, color = "Test - Visitors", linetype = "Test"), size = 1) +
+  geom_line(data = egizio_train_df, aes(x = date, y = visitors, color = "Train - Visitors", linetype = "Train"), linewidth = 1) +
+  geom_line(data = egizio_test_df, aes(x = date, y = visitors, color = "Test - Visitors", linetype = "Test"), linewidth = 1) +
   labs(title = "Visitors over Time", x = "Date", y = "Visitors") +
   scale_color_manual(name = "Variable", values = c("Train - Visitors" = "red", "Test - Visitors" = "darkred")) +
   scale_linetype_manual(name = "Dataset", values = c("Train" = "solid", "Test" = "dashed")) +
@@ -154,8 +154,8 @@ plot_visitors <- ggplot() +
   theme(legend.position = c(0.95,0.99), legend.title = element_blank())
 
 plot_trends <- ggplot() +
-  geom_line(data = egizio_train_df, aes(x = date, y = trends, color = "Train - Google Trends", linetype = "Train"), size = 1) +
-  geom_line(data = egizio_test_df, aes(x = date, y = trends, color = "Test - Google Trends", linetype = "Test"), size = 1) +
+  geom_line(data = egizio_train_df, aes(x = date, y = trends, color = "Train - Google Trends", linetype = "Train"), linewidth = 1) +
+  geom_line(data = egizio_test_df, aes(x = date, y = trends, color = "Test - Google Trends", linetype = "Test"), linewidth = 1) +
   labs(title = "Google Trends over Time", x = "Date", y = "Google Trends") +
   scale_color_manual(name = "Variable", values = c("Train - Google Trends" = "blue", "Test - Google Trends" = "darkblue")) +
   scale_linetype_manual(name = "Dataset", values = c("Train" = "solid", "Test" = "dashed")) +

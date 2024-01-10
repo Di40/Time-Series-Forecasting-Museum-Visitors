@@ -120,10 +120,10 @@ print(colSums(is.na(italy_holidays_df)))
 
 # ---------------------------------------------------------------------------- #
 # Read Turin arrivals data 
-turin_arrivals_df <- read.csv("../../data/Turin_arrivals.csv")
+turin_arrivals_df <- read.csv("../../data/turin_arrivals.csv")
 str(turin_arrivals_df)
 
-turin_arrivals_df$date <- as.Date(as.yearmon(turin_arrivals_df$date))
+turin_arrivals_df$date <- as.Date(turin_arrivals_df$date, format = "%m/%d/%Y")
 
 str(turin_arrivals_df)
 

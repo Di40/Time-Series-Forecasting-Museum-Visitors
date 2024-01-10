@@ -42,6 +42,8 @@ cinema_visitors_df$month <- as.ordered(cinema_visitors_df$month)
 # Reorder columns
 cinema_visitors_df <- cinema_visitors_df[, c('date', 'year', 'month', 'visitors')]
 
+cinema_visitors_df$date_numeric <- as.numeric(cinema_visitors_df$date)
+
 str(cinema_visitors_df)
 
 print("Count of NAs in each column:")
@@ -118,10 +120,10 @@ print(colSums(is.na(italy_holidays_df)))
 
 # ---------------------------------------------------------------------------- #
 # Read Turin arrivals data 
-turin_arrivals_df <- read.csv("../../data/Turin_arrivals.csv")
+turin_arrivals_df <- read.csv("../../data/turin_arrivals.csv")
 str(turin_arrivals_df)
 
-turin_arrivals_df$date <- as.Date(as.yearmon(turin_arrivals_df$date))
+turin_arrivals_df$date <- as.Date(turin_arrivals_df$date, format = "%m/%d/%Y")
 
 str(turin_arrivals_df)
 
@@ -258,7 +260,7 @@ abs_acf_values_arrivals <- abs(ccf_arrivals$acf)[1:12]
 top_lags_arrivals <- order(abs_acf_values_arrivals, decreasing = TRUE)[1:3]
 top_lags_arrivals <- top_lags_arrivals - LAG_MAX - 1
 print(top_lags_arrivals)
-# -6 -1 -5
+# -6 -12  -1
 # We have maximum correlation at:
 # visitors[t] ~ arrivals[t-6]
 

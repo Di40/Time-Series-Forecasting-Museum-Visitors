@@ -26,14 +26,14 @@ if (!file.exists("../../data/cinema_final.rds")) {
 }
 cinema_df <- readRDS("../../data/cinema_final.rds")
 
-# We don't need month and year for visualization purposes, so we drop them.
-columns_to_exclude <- c("month", "year")
+# We don't need month, year and date_numeric for visualization purposes, so we drop them.
+columns_to_exclude <- c("month", "year", "date_numeric")
 cinema_df <- cinema_df[, !names(cinema_df) %in% columns_to_exclude]
 
 str(cinema_df)
 
 # Exclude the lagged regressors:
-cinema_df <- cinema_df %>% select(-starts_with("lagged_"))
+cinema_df <- cinema_df %>% dplyr::select(-starts_with("lagged_"))
 
 # Convert back to integer just for visualization purposes.
 cinema_df$Covid_closures <- as.integer(cinema_df$Covid_closures)

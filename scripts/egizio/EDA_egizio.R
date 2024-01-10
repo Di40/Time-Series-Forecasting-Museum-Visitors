@@ -30,10 +30,10 @@ egizio_df <- readRDS("../../data/egizio_final.rds")
 str(egizio_df)
 
 # Exclude the lagged regressors:
-egizio_df <- egizio_df %>% select(-starts_with("lagged_"))
+egizio_df <- egizio_df %>% dplyr::select(-starts_with("lagged_"))
 
-# We don't need month and year for visualization purposes, so we drop them.
-columns_to_exclude <- c("month", "year")
+# We don't need month, year and date_numeric for visualization purposes, so we drop them.
+columns_to_exclude <- c("month", "year", "date_numeric")
 egizio_df <- egizio_df[, !names(egizio_df) %in% columns_to_exclude]
 
 str(egizio_df)
