@@ -150,9 +150,9 @@ create_boxplots <- function(data, group_var, title, x_label, y_label) {
   
   melted_df <- melt(melted_df, id.vars = c("date", "group_col"))
   df_melted_visitors <- subset(melted_df, variable == "visitors")
-  
-  ggplot(df_melted_visitors, aes(x = factor(group_col), y = value, fill = variable)) +
-    geom_boxplot() +
+
+    ggplot(df_melted_visitors, aes(x = factor(group_col), y = value, fill = variable)) +
+    geom_boxplot(fill = "#957E7E") +
     labs(title = title, x = x_facet_label, y = y_label) +
     theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
     theme(axis.title.x = element_blank(), axis.text.x = element_blank()) +
@@ -160,11 +160,11 @@ create_boxplots <- function(data, group_var, title, x_label, y_label) {
 }
 
 # Create boxplots for each month
-png("../../plots/cinema/monthly_boxplots.png", width=1500, height=1000)
+png("../../plots/cinema/monthly_boxplots.png", width=2000, height=1000)
 create_boxplots(cinema_df, "month", "Cinema - Monthly Boxplots for Visitors", "Month", "Visitors")
 dev.off()
 
-png("../../plots/cinema/yearly_boxplots.png", width=1500, height=1000)
+png("../../plots/cinema/yearly_boxplots.png", width=2000, height=1000)
 # Create boxplots for each year
 create_boxplots(cinema_df, "year", "Cinema - Yearly Boxplots for Visitors", "Year", "Visitors")
 dev.off()

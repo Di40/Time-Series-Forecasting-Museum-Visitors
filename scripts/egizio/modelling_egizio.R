@@ -1693,8 +1693,8 @@ lines(as.numeric(egizio_visitors_unstandardized_train_ts - egizio_visitors_comp$
 
 pred_gbm_visitors <- predict(best_gbm, newx = 1:216)
 pred_inst_gbm_visitors <- make.instantaneous(pred_gbm_visitors)
-plot.ts(pred_inst_gbm_visitors[1:204])
-lines(as.numeric(egizio_visitors_comp$trend), col=2)
+plot.ts(pred_inst_gbm_visitors[1:204], col="#84dccf", lwd=2.5)
+lines(as.numeric(egizio_visitors_comp$trend), col="#216057", lwd=2.5)
 
 plot.ts(pred_inst_gbm_visitors[1:204] - as.numeric(egizio_visitors_comp$trend))
 # Mostly the outliers are left and noise.
@@ -1945,12 +1945,21 @@ plot(predicted_visitors_sarima_no_covid)
 egizio_train_visitors_covid_replaced <- egizio_train_df
 egizio_train_visitors_covid_replaced$visitors[183:nrow(egizio_train_df)] <- predicted_visitors_sarima_no_covid$mean
 
+# Visualize the whole time series
 plot(egizio_train_visitors_covid_replaced$date,
-     egizio_train_visitors_covid_replaced$visitors,
+     ((egizio_train_visitors_covid_replaced$visitors * sd(egizio_train_df_copy$visitors)) + mean(egizio_train_df_copy$visitors)),
      type='l', xlab="Date", ylab="Visitors",
-     main="Visitors with interpolation for COVID months")
-lines(egizio_train_df$date[182:204], egizio_train_df$visitors[182:204], col="red")
+     main="Egizio Visitors with Forecasting Interpolation for COVID months", col="#015047", lwd=2.5, ylim=c(0,120000))
+lines(egizio_train_df$date[182:204], ((egizio_train_df$visitors[182:204] * sd(egizio_train_df_copy$visitors)) + mean(egizio_train_df_copy$visitors)), col="#D5A021", lwd=4.5)
+abline(v = egizio_train_df$date[182], col = "#775761", lty = 2, lwd = 2.5)
 
+# Visualize just the COVID interpolation
+plot(egizio_train_visitors_covid_replaced$date[182:204],
+     ((egizio_train_visitors_covid_replaced$visitors[182:204] * sd(egizio_train_df_copy$visitors)) + mean(egizio_train_df_copy$visitors)),
+     type='l', xlab="Date", ylab="Visitors",
+     main="Interpolation using Forecasting", col="#015047", lwd=3.5, ylim=c(0,120000))
+lines(egizio_train_df$date[182:204], ((egizio_train_df$visitors[182:204] * sd(egizio_train_df_copy$visitors)) + mean(egizio_train_df_copy$visitors)), col="#D5A021", lwd=3.5)
+abline(v = egizio_train_df$date[182], col = "#775761", lty = 2, lwd = 2.5)
 
 # Refit the same model from above (used for training) on the whole
 # new artificial training time series egizio_train_visitors_covid_replaced:
@@ -2041,7 +2050,22 @@ for (i in seq(181, 204)) {
   }
 }
 
-plot.ts(egizio_train_covid_interpolated_mean_ds$visitors, ylab="Visitors")
+# Visualize the whole time series
+plot(egizio_train_covid_interpolated_mean_ds$date,
+     ((egizio_train_covid_interpolated_mean_ds$visitors * sd(egizio_train_df_copy$visitors)) + mean(egizio_train_df_copy$visitors)),
+     type='l', xlab="Date", ylab="Visitors",
+     main="Egizio Visitors with Forecasting Interpolation for COVID months", col="#015047", lwd=2.5, ylim=c(0,120000))
+lines(egizio_train_df$date[182:204], ((egizio_train_df$visitors[182:204] * sd(egizio_train_df_copy$visitors)) + mean(egizio_train_df_copy$visitors)), col="#D5A021", lwd=4.5)
+abline(v = egizio_train_df$date[182], col = "#775761", lty = 2, lwd = 2.5)
+
+# Visualize just the COVID interpolation
+plot(egizio_train_covid_interpolated_mean_ds$date[182:204],
+     ((egizio_train_covid_interpolated_mean_ds$visitors[182:204] * sd(egizio_train_df_copy$visitors)) + mean(egizio_train_df_copy$visitors)),
+     type='l', xlab="Date", ylab="Visitors",
+     main="Interpolation using monthly mean", col="#015047", lwd=3.5, ylim=c(0,120000))
+lines(egizio_train_df$date[182:204], ((egizio_train_df$visitors[182:204] * sd(egizio_train_df_copy$visitors)) + mean(egizio_train_df_copy$visitors)), col="#D5A021", lwd=3.5)
+abline(v = egizio_train_df$date[182], col = "#775761", lty = 2, lwd = 2.5)
+
 
 # Fit on the whole new artificial training time series egizio_train_visitors_covid_replaced:
 egizio_train_visitors_covid_interpolated_mean_ts <- ts(egizio_train_covid_interpolated_mean_ds$visitors, frequency=12)
@@ -2098,20 +2122,42 @@ ggplot(egizio_predictions_df, aes(x = date)) +
 
 # Compare all predictions:
 ggplot(egizio_predictions_df, aes(x = date)) +
-  geom_line(aes(y = visitors_true, color = "True"), linewidth = 1) +
+  geom_line(aes(y = visitors_true, color = "True"), linewidth = 1.5) +
   geom_line(aes(y = predicted_visitors_sarima, color = "No interpolation"),
-            linetype = "dashed", linewidth = 1) +
-  geom_line(aes(y = predicted_visitors_sarima_covid_replaced_mean, color = "COVID Interpolated Mean"),
-            linetype = "dashed", linewidth = 1) +
-  geom_line(aes(y = predicted_visitors_sarima_covid_replaced_forecast, color = "COVID Interpolated Forecast"),
-            linetype = "dashed", linewidth = 1) +
-  labs(title = "Visitors and Predicted Values Over Time",
+            linetype = "dashed", linewidth = 1.5) +
+  geom_line(aes(y = predicted_visitors_sarima_covid_replaced_mean, color = "COVID Interpolated - Mean"),
+            linetype = "dashed", linewidth = 1.5) +
+  geom_line(aes(y = predicted_visitors_sarima_covid_replaced_forecast, color = "COVID Interpolated - Forecast"),
+            linetype = "dashed", linewidth = 1.5) +
+  labs(title = "True vs Predicted Visitors Over Time",
        x = "Date",
        y = "Values") +
-  scale_color_manual(values = c("True"="red",
-                                "No interpolation" = "green",
-                                "COVID Interpolated Mean" = "blue",
-                                "COVID Interpolated Forecast" = "purple"))
+  scale_color_manual(values = c("True"="#572F43",
+                                "No interpolation" = "#D5A021",
+                                "COVID Interpolated - Mean" = "#00a6fb",
+                                "COVID Interpolated - Forecast" = "#86BA90")) +
+  labs(color = NULL) +
+  theme(legend.position = c(1, 1),  # Place legend on top right
+        legend.justification = c(1, 1),  # Justify legend to the top right
+        legend.key.size = unit(2, "lines"),  # Adjust the legend key size
+        legend.text = element_text(size = 15),  # Set the legend text size
+        legend.background = element_rect(fill = "transparent"))  # Make the legend transparent
+
+# Show both interpolations and the true values on the same plot
+plot(egizio_train_df$date, ((egizio_train_df$visitors * sd(egizio_train_df_copy$visitors)) + mean(egizio_train_df_copy$visitors)), type='l', xlab="Date", ylab="Visitors", main="Interpolation of COVID months using Forecasting/Monthly mean", col="#015047", lwd=2.5, ylim=c(0,122000))
+lines(egizio_train_df$date[182:204], ((egizio_train_visitors_covid_replaced$visitors[182:204] * sd(egizio_train_df_copy$visitors)) + mean(egizio_train_df_copy$visitors)), col="#D5A021", lwd=3.5)
+lines(egizio_train_df$date[182:204], ((egizio_train_covid_interpolated_mean_ds$visitors[182:204] * sd(egizio_train_df_copy$visitors)) + mean(egizio_train_df_copy$visitors)), col="#572F43", lwd=3.5)
+abline(v = egizio_train_df$date[182], col = "#DCD6F7", lty = 2, lwd = 2.5)
+legend("topleft",
+       bg="transparent",
+       legend = c("Original Data", "COVID Interpolation using Forecasting", "COVID Interpolation using Monthly Mean"),
+       col = c("#015047", "#D5A021", "#572F43"),
+       lty = c(1, 1, 1),  # Line types for each line
+       lwd = c(3.5, 3.5, 3.5),  # Line widths for each line
+       cex = 0.8,
+       box.lty = 0)
+
+
 
 # Round and print metrics for COVID
 rounded_covid_metrics <- round(covid_metrics_df[, -1], 3)

@@ -1252,11 +1252,11 @@ ts_cv_spec %>%
 
 run_cross_validation <- FALSE
 
-cinema_train_no_lagged_df <- cinema_train_df[, -which(names(cinema_train_df) %in% c("date", "month", "year"))]
+cinema_train_no_lagged_df <- cinema_train_df_copy[, -which(names(cinema_train_df) %in% c("date", "month", "year"))]
 cinema_train_no_lagged_df <- cinema_train_no_lagged_df[, !startsWith(names(cinema_train_no_lagged_df), "lagged_")]
 # Too difficult to optimize with a lot of variables.
 # Also, date_numeric outperforms month+year.
-cinema_test_no_lagged_df <- cinema_test_df[, -which(names(cinema_test_df) %in% c("date", "month", "year"))]
+cinema_test_no_lagged_df <- cinema_test_df_copy[, -which(names(cinema_test_df) %in% c("date", "month", "year"))]
 cinema_test_no_lagged_df <- cinema_test_no_lagged_df[, !startsWith(names(cinema_test_no_lagged_df), "lagged_")]
 
 if (run_cross_validation) {
@@ -1342,13 +1342,13 @@ ggplot(cinema_predictions_df, aes(x = date)) +
   scale_color_manual(values = c("Visitors" = "red", "Predicted" = "blue"))
 
 # Partial dependence plots
-plot(final_model_boosting, i.var=1, n.trees = final_model_boosting$n.trees, ylab = "visitors")
-plot(final_model_boosting, i.var=2, n.trees = final_model_boosting$n.trees, ylab = "visitors")
-plot(final_model_boosting, i.var=3, n.trees = final_model_boosting$n.trees, ylab = "visitors")
-plot(final_model_boosting, i.var=4, n.trees = final_model_boosting$n.trees, ylab = "visitors")
-plot(final_model_boosting, i.var=5, n.trees = final_model_boosting$n.trees, ylab = "visitors")
-plot(final_model_boosting, i.var=6, n.trees = final_model_boosting$n.trees, ylab = "visitors")
-plot(final_model_boosting, i.var=7, n.trees = final_model_boosting$n.trees, ylab = "visitors")
+plot(final_model_boosting, i.var=1, n.trees = final_model_boosting$n.trees, ylab = "visitors", lwd=4)
+plot(final_model_boosting, i.var=2, n.trees = final_model_boosting$n.trees, ylab = "visitors", lwd=4)
+plot(final_model_boosting, i.var=3, n.trees = final_model_boosting$n.trees, ylab = "visitors", lwd=4)
+plot(final_model_boosting, i.var=4, n.trees = final_model_boosting$n.trees, ylab = "visitors", lwd=4)
+plot(final_model_boosting, i.var=5, n.trees = final_model_boosting$n.trees, ylab = "visitors", lwd=4)
+plot(final_model_boosting, i.var=6, n.trees = final_model_boosting$n.trees, ylab = "visitors", lwd=4)
+plot(final_model_boosting, i.var=7, n.trees = final_model_boosting$n.trees, ylab = "visitors", lwd=4)
 plot(final_model_boosting, i.var=c(2,4), n.trees = final_model_boosting$n.trees)
 
 # --------------------------------------------------------------------- #
@@ -1651,12 +1651,35 @@ rounded_metrics_df <- cbind(metrics_df[, 1, drop = FALSE], rounded_metrics)
 print(rounded_metrics_df)
 
 # Sort based on RMSE, AIC
-sorted_metrics_df <- metrics_df[order(metrics_df$RMSE, metrics_df$MAPE),]
+sorted_metrics_df <- rounded_metrics_df[order(rounded_metrics_df$RMSE, rounded_metrics_df$MAPE),]
 print(sorted_metrics_df)
 
 # Print the top 5 models
 cat("Top 5 models:\n")
 print(head(sorted_metrics_df, 5))
+
+ggplot(cinema_predictions_df, aes(x = date)) +
+  geom_line(aes(y = visitors_true, color = "True"), linewidth = 1.5) +
+  
+  geom_line(aes(y = predicted_ESHW, color = "ESHW"),
+            linetype = "dashed", linewidth = 1.5) +
+  geom_line(aes(y = predicted_tslm, color = "TSLM"),
+            linetype = "dashed", linewidth = 1.5) +
+  geom_line(aes(y = predicted_visitors_sarima, color = "SARIMA"),
+            linetype = "dashed", linewidth = 1.5) +
+  labs(title = "True vs Predicted Visitors Over Time",
+       x = "Date",
+       y = "Values") +
+  scale_color_manual(values = c("True" = "#572F43",
+                                "ESHW" = "#D5A021",
+                                "TSLM" = "#00a6fb",
+                                "SARIMA" = "#86BA90")) +
+  labs(color = NULL) +
+  theme(legend.position = c(1, 0), 
+        legend.justification = c(1, 0),
+        legend.key.size = unit(2, "lines"),  # Adjust the legend key size
+        legend.background = element_rect(fill = "transparent"))  # Make the legend transparent
+
 
 # Error analysis: # ToDo: Replace predicted_visitors_sarima with the best model column.
 best_model <- "SARIMA - Improved"
@@ -1757,12 +1780,21 @@ plot(predicted_visitors_sarima_no_covid)
 cinema_train_visitors_covid_replaced <- cinema_train_df
 cinema_train_visitors_covid_replaced$visitors[183:nrow(cinema_train_df)] <- predicted_visitors_sarima_no_covid$mean
 
+# Visualize the whole time series
 plot(cinema_train_visitors_covid_replaced$date,
-     cinema_train_visitors_covid_replaced$visitors,
+     ((cinema_train_visitors_covid_replaced$visitors * sd(cinema_train_df_copy$visitors)) + mean(cinema_train_df_copy$visitors)),
      type='l', xlab="Date", ylab="Visitors",
-     main="Visitors with interpolation for COVID months")
-lines(cinema_train_df$date[182:204], cinema_train_df$visitors[182:204], col="red")
+     main="Egizio Visitors with Forecasting Interpolation for COVID months", col="#015047", lwd=2.5, ylim=c(0,120000))
+lines(cinema_train_df$date[182:204], ((cinema_train_df$visitors[182:204] * sd(cinema_train_df_copy$visitors)) + mean(cinema_train_df_copy$visitors)), col="#D5A021", lwd=4.5)
+abline(v = cinema_train_df$date[182], col = "#775761", lty = 2, lwd = 2.5)
 
+# Visualize just the COVID interpolation
+plot(cinema_train_visitors_covid_replaced$date[182:204],
+     ((cinema_train_visitors_covid_replaced$visitors[182:204] * sd(cinema_train_df_copy$visitors)) + mean(cinema_train_df_copy$visitors)),
+     type='l', xlab="Date", ylab="Visitors",
+     main="Interpolation using Forecasting", col="#015047", lwd=3.5, ylim=c(0,85000))
+lines(cinema_train_df$date[182:204], ((cinema_train_df$visitors[182:204] * sd(cinema_train_df_copy$visitors)) + mean(cinema_train_df_copy$visitors)), col="#D5A021", lwd=3.5)
+abline(h = max(((cinema_train_visitors_covid_replaced$visitors[182:204] * sd(cinema_train_df_copy$visitors)) + mean(cinema_train_df_copy$visitors))), col = "#775761", lty = 2, lwd = 2.5)
 
 # Refit the same model from above (used for training) on the whole
 # new artificial training time series cinema_train_visitors_covid_replaced:
@@ -1853,7 +1885,21 @@ for (i in seq(181, 204)) {
   }
 }
 
-plot.ts(cinema_train_covid_interpolated_mean_ds$visitors, ylab="Visitors")
+# Visualize the whole time series
+plot(cinema_train_covid_interpolated_mean_ds$date,
+     ((cinema_train_covid_interpolated_mean_ds$visitors * sd(cinema_train_df_copy$visitors)) + mean(cinema_train_df_copy$visitors)),
+     type='l', xlab="Date", ylab="Visitors",
+     main="Egizio Visitors with Forecasting Interpolation for COVID months", col="#015047", lwd=2.5, ylim=c(0,120000))
+lines(cinema_train_df$date[182:204], ((cinema_train_df$visitors[182:204] * sd(cinema_train_df_copy$visitors)) + mean(cinema_train_df_copy$visitors)), col="#D5A021", lwd=4.5)
+abline(v = cinema_train_df$date[182], col = "#775761", lty = 2, lwd = 2.5)
+
+# Visualize just the COVID interpolation
+plot(cinema_train_covid_interpolated_mean_ds$date[182:204],
+     ((cinema_train_covid_interpolated_mean_ds$visitors[182:204] * sd(cinema_train_df_copy$visitors)) + mean(cinema_train_df_copy$visitors)),
+     type='l', xlab="Date", ylab="Visitors",
+     main="Interpolation using monthly mean", col="#015047", lwd=3.5, ylim=c(0,78000))
+lines(cinema_train_df$date[182:204], ((cinema_train_df$visitors[182:204] * sd(cinema_train_df_copy$visitors)) + mean(cinema_train_df_copy$visitors)), col="#D5A021", lwd=3.5)
+abline(v = cinema_train_df$date[182], col = "#775761", lty = 2, lwd = 2.5)
 
 # Fit on the whole new artificial training time series cinema_train_visitors_covid_replaced:
 cinema_train_visitors_covid_interpolated_mean_ts <- ts(cinema_train_covid_interpolated_mean_ds$visitors, frequency=12)
@@ -1910,20 +1956,39 @@ ggplot(cinema_predictions_df, aes(x = date)) +
 
 # Compare all predictions:
 ggplot(cinema_predictions_df, aes(x = date)) +
-  geom_line(aes(y = visitors_true, color = "True"), linewidth = 1) +
+  geom_line(aes(y = visitors_true, color = "True"), linewidth = 1.5) +
   geom_line(aes(y = predicted_visitors_sarima, color = "No interpolation"),
-            linetype = "dashed", linewidth = 1) +
-  geom_line(aes(y = predicted_visitors_sarima_covid_replaced_mean, color = "COVID Interpolated Mean"),
-            linetype = "dashed", linewidth = 1) +
-  geom_line(aes(y = predicted_visitors_sarima_covid_replaced_forecast, color = "COVID Interpolated Forecast"),
-            linetype = "dashed", linewidth = 1) +
-  labs(title = "Visitors and Predicted Values Over Time",
+            linetype = "dashed", linewidth = 1.5) +
+  geom_line(aes(y = predicted_visitors_sarima_covid_replaced_mean, color = "COVID Interpolated - Mean"),
+            linetype = "dashed", linewidth = 1.5) +
+  geom_line(aes(y = predicted_visitors_sarima_covid_replaced_forecast, color = "COVID Interpolated - Forecast"),
+            linetype = "dashed", linewidth = 1.5) +
+  labs(title = "True vs Predicted Visitors Over Time",
        x = "Date",
        y = "Values") +
-  scale_color_manual(values = c("True"="red",
-                                "No interpolation" = "green",
-                                "COVID Interpolated Mean" = "blue",
-                                "COVID Interpolated Forecast" = "purple"))
+  scale_color_manual(values = c("True"="#572F43",
+                                "No interpolation" = "#D5A021",
+                                "COVID Interpolated - Mean" = "#00a6fb",
+                                "COVID Interpolated - Forecast" = "#86BA90")) +
+  labs(color = NULL) +
+  theme(legend.position = c(1, 1),  # Place legend on top right
+        legend.justification = c(1, 1),  # Justify legend to the top right
+        legend.key.size = unit(2, "lines"),  # Adjust the legend key size
+        legend.text = element_text(size = 15),  # Set the legend text size
+        legend.background = element_rect(fill = "transparent"))  # Make the legend transparent
+
+# Show both interpolations and the true values on the same plot
+plot(cinema_train_df$date, ((cinema_train_df$visitors * sd(cinema_train_df_copy$visitors)) + mean(cinema_train_df_copy$visitors)), type='l', xlab="Date", ylab="Visitors", main="Interpolation of COVID months using Forecasting/Monthly mean", col="#015047", lwd=2.5, ylim=c(0,85000))
+lines(cinema_train_df$date[182:204], ((cinema_train_visitors_covid_replaced$visitors[182:204] * sd(cinema_train_df_copy$visitors)) + mean(cinema_train_df_copy$visitors)), col="#D5A021", lwd=3.5)
+lines(cinema_train_df$date[182:204], ((cinema_train_covid_interpolated_mean_ds$visitors[182:204] * sd(cinema_train_df_copy$visitors)) + mean(cinema_train_df_copy$visitors)), col="#572F43", lwd=3.5)
+abline(v = cinema_train_df$date[182], col = "#DCD6F7", lty = 2, lwd = 2.5)
+legend("bottomleft", 
+       legend = c("Original Data", "COVID Interpolation using Forecasting", "COVID Interpolation using Monthly Mean"),
+       col = c("#015047", "#D5A021", "#572F43"),
+       lty = c(1, 1, 1),  # Line types for each line
+       lwd = c(3.5, 3.5, 3.5),  # Line widths for each line
+       cex = 0.8,
+       box.lty = 0)
 
 # Round and print metrics for COVID
 rounded_covid_metrics <- round(covid_metrics_df[, -1], 3)
