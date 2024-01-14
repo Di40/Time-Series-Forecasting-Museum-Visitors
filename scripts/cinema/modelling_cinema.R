@@ -1658,6 +1658,7 @@ print(sorted_metrics_df)
 cat("Top 5 models:\n")
 print(head(sorted_metrics_df, 5))
 
+png("../../plots/cinema/predictions.png", width=1700, height=1000)
 ggplot(cinema_predictions_df, aes(x = date)) +
   geom_line(aes(y = visitors_true, color = "True"), linewidth = 1.5) +
   
@@ -1679,7 +1680,7 @@ ggplot(cinema_predictions_df, aes(x = date)) +
         legend.justification = c(1, 0),
         legend.key.size = unit(2, "lines"),  # Adjust the legend key size
         legend.background = element_rect(fill = "transparent"))  # Make the legend transparent
-
+dev.off()
 
 # Error analysis: # ToDo: Replace predicted_visitors_sarima with the best model column.
 best_model <- "SARIMA - Improved"
@@ -1955,6 +1956,7 @@ ggplot(cinema_predictions_df, aes(x = date)) +
                                 "COVID Interpolated predictions" = "blue"))
 
 # Compare all predictions:
+png("../../plots/cinema/covid_interpolation_predictions.png", width=1700, height=1000)
 ggplot(cinema_predictions_df, aes(x = date)) +
   geom_line(aes(y = visitors_true, color = "True"), linewidth = 1.5) +
   geom_line(aes(y = predicted_visitors_sarima, color = "No interpolation"),
@@ -1976,6 +1978,7 @@ ggplot(cinema_predictions_df, aes(x = date)) +
         legend.key.size = unit(2, "lines"),  # Adjust the legend key size
         legend.text = element_text(size = 15),  # Set the legend text size
         legend.background = element_rect(fill = "transparent"))  # Make the legend transparent
+dev.off()
 
 # Show both interpolations and the true values on the same plot
 plot(cinema_train_df$date, ((cinema_train_df$visitors * sd(cinema_train_df_copy$visitors)) + mean(cinema_train_df_copy$visitors)), type='l', xlab="Date", ylab="Visitors", main="Interpolation of COVID months using Forecasting/Monthly mean", col="#015047", lwd=2.5, ylim=c(0,85000))

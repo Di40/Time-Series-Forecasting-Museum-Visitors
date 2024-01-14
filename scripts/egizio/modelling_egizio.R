@@ -1823,6 +1823,31 @@ print(sorted_metrics_df)
 cat("Top 5 models:\n")
 print(head(sorted_metrics_df, 5))
 
+png("../../plots/egizio/predictions.png", width=1700, height=1000)
+ggplot(egizio_predictions_df, aes(x = date)) +
+  geom_line(aes(y = visitors_true, color = "True"), linewidth = 1.5) +
+  
+  geom_line(aes(y = predicted_visitors_sarimax, color = "SARIMAX"),
+            linetype = "dashed", linewidth = 1.5) +
+  geom_line(aes(y = predicted_gam, color = "GAM"),
+            linetype = "dashed", linewidth = 1.5) +
+  geom_line(aes(y = predicted_ESHW, color = "ESHW"),
+            linetype = "dashed", linewidth = 1.5) +
+  labs(title = "True vs Predicted Visitors Over Time",
+       x = "Date",
+       y = "Values") +
+  scale_color_manual(values = c("True" = "#572F43",
+                                "SARIMAX" = "#D5A021",
+                                "GAM" = "#00a6fb",
+                                "ESHW" = "#86BA90")) +
+  labs(color = NULL) +
+  theme(legend.position = c(1, 0), 
+        legend.justification = c(1, 0),
+        legend.key.size = unit(6, "lines"),  # Adjust the legend key size
+        legend.text = element_text(size = 24),
+        legend.background = element_rect(fill = "transparent"))  # Make the legend transparent
+dev.off()
+
 # Error analysis: # ToDo: Replace predicted_visitors_sarima with the best model column.
 best_model <- "SARIMA - Improved"
 sorted_egizio_predictions_df <- egizio_predictions_df[, c("visitors_true", "predicted_visitors_sarima")]
@@ -2121,6 +2146,7 @@ ggplot(egizio_predictions_df, aes(x = date)) +
                                 "COVID Interpolated predictions" = "blue"))
 
 # Compare all predictions:
+png("../../plots/egizio/covid_interpolation_predictions.png", width=1700, height=1000)
 ggplot(egizio_predictions_df, aes(x = date)) +
   geom_line(aes(y = visitors_true, color = "True"), linewidth = 1.5) +
   geom_line(aes(y = predicted_visitors_sarima, color = "No interpolation"),
@@ -2142,6 +2168,7 @@ ggplot(egizio_predictions_df, aes(x = date)) +
         legend.key.size = unit(2, "lines"),  # Adjust the legend key size
         legend.text = element_text(size = 15),  # Set the legend text size
         legend.background = element_rect(fill = "transparent"))  # Make the legend transparent
+dev.off()
 
 # Show both interpolations and the true values on the same plot
 plot(egizio_train_df$date, ((egizio_train_df$visitors * sd(egizio_train_df_copy$visitors)) + mean(egizio_train_df_copy$visitors)), type='l', xlab="Date", ylab="Visitors", main="Interpolation of COVID months using Forecasting/Monthly mean", col="#015047", lwd=2.5, ylim=c(0,122000))
@@ -2156,8 +2183,6 @@ legend("topleft",
        lwd = c(3.5, 3.5, 3.5),  # Line widths for each line
        cex = 0.8,
        box.lty = 0)
-
-
 
 # Round and print metrics for COVID
 rounded_covid_metrics <- round(covid_metrics_df[, -1], 3)
